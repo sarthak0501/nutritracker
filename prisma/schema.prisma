@@ -1,0 +1,90 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+enum MealType {
+  BREAKFAST
+  LUNCH
+  DINNER
+  SNACK
+  CUSTOM
+}
+
+enum AmountUnit {
+  GRAM
+  SERVING
+}
+
+enum FoodSource {
+  MANUAL
+  LLM
+}
+
+model Food {
+  id              String     @id @default(cuid())
+  name            String
+  brand           String?
+  source          FoodSource @default(MANUAL)
+
+  kcalPer100g     Float
+  proteinPer100g  Float
+  carbsPer100g    Float
+  fatPer100g      Float
+  fiberPer100g    Float?
+  sodiumMgPer100g Float?
+
+  servingName     String?
+  servingGrams    Float?
+
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+
+  logEntries      LogEntry[]
+
+  @@index([name])
+}
+
+model LogEntry {
+  id             String     @id @default(cuid())
+
+  /// YYYY-MM-DD (local date)
+  date           String
+  mealType       MealType
+  mealName       String?
+
+  amount         Float
+  unit           AmountUnit @default(GRAM)
+
+  sourceText     String?
+  isEstimated    Boolean    @default(false)
+  estimationMeta Json?
+
+  foodId         String
+  food           Food       @relation(fields: [foodId], references: [id], onDelete: Cascade)
+
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
+
+  @@index([date])
+  @@index([mealType, date])
+}
+
+model Profile {
+  /// Single-row profile (local-only MVP)
+  id            Int      @id @default(1)
+
+  kcalTarget    Float    @default(2000)
+  proteinTarget Float    @default(120)
+  carbsTarget   Float    @default(250)
+  fatTarget     Float    @default(70)
+  fiberTarget   Float?   @default(30)
+
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
