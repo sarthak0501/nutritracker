@@ -144,23 +144,23 @@ export default async function TrendsPage({
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <div className="text-lg font-semibold">Trends</div>
-            <div className="mt-1 text-sm text-slate-500">
+            <div className="mt-1 text-sm text-gray-500">
               {range}-day overview of nutrition and training.
             </div>
           </div>
           <div className="flex gap-2">
             <Link
               href="/trends?range=7"
-              className={`rounded-lg border px-3 py-1.5 text-sm ${
-                range === 7 ? "bg-slate-900 text-white border-slate-900" : "border-slate-200 hover:bg-slate-50"
+              className={`rounded-xl px-3 py-1.5 text-sm ${
+                range === 7 ? "bg-brand-600 text-white border-brand-600" : "border-gray-100 hover:bg-gray-50"
               }`}
             >
               7d
             </Link>
             <Link
               href="/trends?range=30"
-              className={`rounded-lg border px-3 py-1.5 text-sm ${
-                range === 30 ? "bg-slate-900 text-white border-slate-900" : "border-slate-200 hover:bg-slate-50"
+              className={`rounded-xl px-3 py-1.5 text-sm ${
+                range === 30 ? "bg-brand-600 text-white border-brand-600" : "border-gray-100 hover:bg-gray-50"
               }`}
             >
               30d
@@ -179,16 +179,16 @@ export default async function TrendsPage({
               return (
                 <div key={g.label}>
                   <div className="flex items-baseline justify-between text-sm">
-                    <span className="text-slate-600">{g.label}</span>
-                    <span className="tabular-nums text-xs text-slate-500">
+                    <span className="text-gray-600">{g.label}</span>
+                    <span className="tabular-nums text-xs text-gray-500">
                       {g.current} / {Math.round(g.target)} {g.unit}
                       {over && <span className="ml-1 text-amber-600">(over)</span>}
                     </span>
                   </div>
-                  <div className="mt-1 h-2 rounded-full bg-slate-100 overflow-hidden">
+                  <div className="mt-1 h-2 rounded-full bg-gray-100 overflow-hidden">
                     <div
                       className={`h-full rounded-full transition-all ${
-                        over ? "bg-amber-400" : pct >= 80 ? "bg-green-500" : "bg-slate-400"
+                        over ? "bg-amber-400" : pct >= 80 ? "bg-green-500" : "bg-gray-400"
                       }`}
                       style={{ width: `${Math.min(100, pct)}%` }}
                     />
@@ -197,7 +197,7 @@ export default async function TrendsPage({
               );
             })}
             {todayWorkout && todayWorkout.caloriesBurned > 0 && (
-              <div className="mt-1 text-xs text-slate-500">
+              <div className="mt-1 text-xs text-gray-500">
                 Net calories today: {(todayNutrition?.kcal ?? 0) - todayWorkout.caloriesBurned} kcal
                 ({todayWorkout.caloriesBurned} burned)
               </div>
@@ -217,16 +217,16 @@ export default async function TrendsPage({
       {/* Nutrition trends */}
       <Card title="Nutrition">
         <div className="grid gap-2 md:grid-cols-3 mb-4">
-          <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
-            <div className="text-xs text-slate-500">Avg calories</div>
+          <div className="rounded-xl bg-gray-50 p-3">
+            <div className="text-xs text-gray-500">Avg calories</div>
             <div className="mt-1 text-lg font-semibold tabular-nums">{avgNutrition.kcal} kcal</div>
           </div>
-          <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
-            <div className="text-xs text-slate-500">Avg protein</div>
+          <div className="rounded-xl bg-gray-50 p-3">
+            <div className="text-xs text-gray-500">Avg protein</div>
             <div className="mt-1 text-lg font-semibold tabular-nums">{avgNutrition.protein} g</div>
           </div>
-          <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
-            <div className="text-xs text-slate-500">Avg fiber</div>
+          <div className="rounded-xl bg-gray-50 p-3">
+            <div className="text-xs text-gray-500">Avg fiber</div>
             <div className="mt-1 text-lg font-semibold tabular-nums">{avgNutrition.fiber} g</div>
           </div>
         </div>
@@ -236,16 +236,16 @@ export default async function TrendsPage({
       {/* Workout trends */}
       <Card title="Training">
         <div className="grid gap-2 md:grid-cols-3 mb-4">
-          <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
-            <div className="text-xs text-slate-500">Avg cal burned</div>
+          <div className="rounded-xl bg-gray-50 p-3">
+            <div className="text-xs text-gray-500">Avg cal burned</div>
             <div className="mt-1 text-lg font-semibold tabular-nums">{avgWorkout.burned} kcal</div>
           </div>
-          <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
-            <div className="text-xs text-slate-500">Avg volume</div>
+          <div className="rounded-xl bg-gray-50 p-3">
+            <div className="text-xs text-gray-500">Avg volume</div>
             <div className="mt-1 text-lg font-semibold tabular-nums">{avgWorkout.volume} kg</div>
           </div>
-          <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
-            <div className="text-xs text-slate-500">Active days</div>
+          <div className="rounded-xl bg-gray-50 p-3">
+            <div className="text-xs text-gray-500">Active days</div>
             <div className="mt-1 text-lg font-semibold tabular-nums">{avgWorkout.activeDays} / {range}</div>
           </div>
         </div>
@@ -284,8 +284,8 @@ export default async function TrendsPage({
               const weekLabel = `${weekDays[0]?.slice(5)} – ${weekDays[weekDays.length - 1]?.slice(5)}`;
 
               return (
-                <div key={weekIdx} className="rounded-lg border border-slate-200 bg-slate-50 p-3">
-                  <div className="text-xs text-slate-500 mb-1">{weekLabel}</div>
+                <div key={weekIdx} className="rounded-xl bg-gray-50 p-3">
+                  <div className="text-xs text-gray-500 mb-1">{weekLabel}</div>
                   <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm tabular-nums">
                     <span>{Math.round(weekNutrition.kcal / weekDays.length)} kcal/day avg</span>
                     <span>{toFixed1(weekNutrition.protein / weekDays.length)}g protein/day</span>

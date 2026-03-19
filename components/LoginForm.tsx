@@ -8,40 +8,40 @@ export function LoginForm() {
 
   return (
     <form action={action} className="space-y-4">
-      <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm space-y-4">
+      <div className="rounded-2xl bg-white p-6 shadow-lg space-y-4">
         <label className="block space-y-1.5">
-          <span className="text-sm text-slate-600">Username</span>
+          <span className="text-sm font-medium text-gray-700">Username</span>
           <input
             name="username"
             type="text"
             autoComplete="username"
             required
-            className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-slate-900 placeholder-slate-400 focus:border-slate-500 focus:outline-none"
+            className="w-full rounded-xl border-0 bg-gray-100 px-4 py-3 text-gray-900 placeholder-gray-400 ring-1 ring-transparent focus:bg-white focus:ring-2 focus:ring-brand-500 focus:outline-none transition-all"
             placeholder="your username"
           />
         </label>
         <label className="block space-y-1.5">
-          <span className="text-sm text-slate-600">Password</span>
+          <span className="text-sm font-medium text-gray-700">Password</span>
           <input
             name="password"
             type="password"
             autoComplete="current-password"
             required
-            className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-slate-900 placeholder-slate-400 focus:border-slate-500 focus:outline-none"
+            className="w-full rounded-xl border-0 bg-gray-100 px-4 py-3 text-gray-900 placeholder-gray-400 ring-1 ring-transparent focus:bg-white focus:ring-2 focus:ring-brand-500 focus:outline-none transition-all"
             placeholder="••••••••"
           />
         </label>
         {error && (
-          <div className="rounded-lg bg-red-50 border border-red-200 px-3 py-2 text-sm text-red-600">
+          <div className="rounded-xl bg-red-50 px-4 py-3 text-sm text-red-600">
             {error}
           </div>
         )}
         <button
           type="submit"
           disabled={isPending}
-          className="w-full rounded-lg bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-50"
+          className="w-full rounded-xl bg-brand-600 px-4 py-3 text-sm font-bold text-white hover:bg-brand-700 active:scale-[0.98] disabled:opacity-50 transition-all"
         >
-          {isPending ? "Signing in…" : "Sign in"}
+          {isPending ? "Signing in..." : "Sign in"}
         </button>
       </div>
     </form>

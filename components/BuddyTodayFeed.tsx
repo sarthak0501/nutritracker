@@ -26,9 +26,9 @@ export async function BuddyTodayFeed({
 
   if (!buddyId) {
     return (
-      <Card title="🤝 Buddy">
-        <p className="text-sm text-slate-500">
-          No buddy yet. Go to the <a href="/buddy" className="underline text-slate-700">Buddy page</a> to add one!
+      <Card title="Buddy">
+        <p className="text-sm text-gray-400">
+          No buddy yet. Go to <a href="/buddy" className="underline text-brand-600 font-medium">Buddies</a> to add one!
         </p>
       </Card>
     );
@@ -54,29 +54,28 @@ export async function BuddyTodayFeed({
   return (
     <div className="space-y-3">
       <div className="flex items-center gap-2">
-        <span className="text-base font-semibold">🤝 {buddy?.username ?? "Buddy"}'s Today</span>
-        <span className="text-xs text-slate-400">React to motivate them!</span>
+        <span className="text-base font-bold">👥 {buddy?.username ?? "Buddy"}'s Day</span>
+        <span className="text-xs text-gray-400">React to motivate!</span>
       </div>
 
       {entries.length === 0 ? (
         <Card>
-          <p className="text-sm text-slate-500">Your buddy hasn't logged anything yet today.</p>
+          <p className="text-sm text-gray-400">Your buddy hasn't logged anything yet today.</p>
         </Card>
       ) : (
         <>
           <Card>
-            <div className="text-xs text-slate-500 mb-2">Daily total</div>
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-5 text-sm">
+            <div className="grid grid-cols-3 gap-2 sm:grid-cols-5">
               {[
-                { label: "Calories", value: `${round0(dayTotals.kcal)} kcal` },
+                { label: "Calories", value: `${round0(dayTotals.kcal)}` },
                 { label: "Protein", value: `${round1(dayTotals.protein_g)}g` },
                 { label: "Carbs", value: `${round1(dayTotals.carbs_g)}g` },
                 { label: "Fat", value: `${round1(dayTotals.fat_g)}g` },
                 { label: "Fiber", value: `${round1(dayTotals.fiber_g ?? 0)}g` },
               ].map(({ label, value }) => (
-                <div key={label} className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
-                  <div className="text-xs text-slate-500">{label}</div>
-                  <div className="font-medium tabular-nums">{value}</div>
+                <div key={label} className="text-center rounded-xl bg-gray-50 px-2 py-2">
+                  <div className="text-sm font-bold tabular-nums">{value}</div>
+                  <div className="text-[10px] text-gray-400">{label}</div>
                 </div>
               ))}
             </div>
@@ -89,30 +88,31 @@ export async function BuddyTodayFeed({
             }, emptyTotals());
 
             return (
-              <Card
-                key={mealKey}
-                title={`${MEAL_LABELS[mealKey] ?? mealKey} · ${round0(mealTotals.kcal)} kcal`}
-              >
+              <Card key={mealKey}>
+                <div className="flex items-center justify-between mb-3">
+                  <span className="text-sm font-bold text-gray-800">{MEAL_LABELS[mealKey] ?? mealKey}</span>
+                  <span className="text-sm font-semibold tabular-nums text-brand-600">{round0(mealTotals.kcal)} kcal</span>
+                </div>
                 <div className="space-y-3">
                   {mealEntries.map((e) => {
                     const n = safeNutrientsForEntry(e, e.food);
                     return (
-                      <div key={e.id} className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+                      <div key={e.id} className="rounded-xl bg-gray-50 p-3">
                         <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
                           <div>
-                            <div className="text-sm font-medium">
+                            <div className="text-sm font-semibold text-gray-800">
                               {e.food.name}
                               {e.food.brand && (
-                                <span className="font-normal text-slate-400"> ({e.food.brand})</span>
+                                <span className="font-normal text-gray-400"> ({e.food.brand})</span>
                               )}
                             </div>
-                            <div className="text-xs text-slate-500">
+                            <div className="text-xs text-gray-500">
                               {round1(e.amount)} {e.unit === "GRAM" ? "g" : "serving"}
                               {e.isEstimated ? " · estimated" : ""}
                             </div>
                           </div>
-                          <div className="text-xs text-slate-500 tabular-nums">
-                            {n ? `${round0(n.kcal)} kcal · ${round1(n.protein_g)}P / ${round1(n.carbs_g)}C / ${round1(n.fat_g)}F` : "—"}
+                          <div className="text-xs text-gray-500 tabular-nums">
+                            {n ? `${round0(n.kcal)} cal · ${round1(n.protein_g)}P ${round1(n.carbs_g)}C ${round1(n.fat_g)}F` : "—"}
                           </div>
                         </div>
                         <ReactionBar

@@ -55,23 +55,23 @@ export function LogWorkoutTabs({
   return (
     <div>
       {/* Main section tabs */}
-      <div className="flex gap-1 mb-4">
+      <div className="flex rounded-xl bg-gray-100 p-1 mb-4">
         <button
           onClick={() => setTab("log")}
-          className={`flex-1 rounded-lg py-2 text-sm font-medium transition-colors ${
+          className={`flex-1 rounded-lg py-2 text-sm font-semibold transition-all ${
             tab === "log"
-              ? "bg-slate-900 text-white"
-              : "bg-slate-100 text-slate-500 hover:bg-slate-200"
+              ? "bg-white text-gray-900 shadow-sm"
+              : "text-gray-400 hover:text-gray-600"
           }`}
         >
           Log Workout
         </button>
         <button
           onClick={() => setTab("recommend")}
-          className={`flex-1 rounded-lg py-2 text-sm font-medium transition-colors ${
+          className={`flex-1 rounded-lg py-2 text-sm font-semibold transition-all ${
             tab === "recommend"
-              ? "bg-slate-900 text-white"
-              : "bg-slate-100 text-slate-500 hover:bg-slate-200"
+              ? "bg-white text-gray-900 shadow-sm"
+              : "text-gray-400 hover:text-gray-600"
           }`}
         >
           Get Recommendations
@@ -84,20 +84,20 @@ export function LogWorkoutTabs({
           <div className="flex gap-1 mb-3">
             <button
               onClick={() => setLogMode("ai")}
-              className={`flex-1 rounded-md py-1.5 text-xs font-medium transition-colors ${
+              className={`flex-1 rounded-lg py-1.5 text-xs font-semibold transition-all ${
                 logMode === "ai"
-                  ? "bg-slate-200 text-slate-800"
-                  : "text-slate-400 hover:text-slate-600"
+                  ? "bg-gray-200 text-gray-800"
+                  : "text-gray-400 hover:text-gray-600"
               }`}
             >
               AI Estimate
             </button>
             <button
               onClick={() => setLogMode("manual")}
-              className={`flex-1 rounded-md py-1.5 text-xs font-medium transition-colors ${
+              className={`flex-1 rounded-lg py-1.5 text-xs font-semibold transition-all ${
                 logMode === "manual"
-                  ? "bg-slate-200 text-slate-800"
-                  : "text-slate-400 hover:text-slate-600"
+                  ? "bg-gray-200 text-gray-800"
+                  : "text-gray-400 hover:text-gray-600"
               }`}
             >
               Manual Entry
@@ -107,7 +107,7 @@ export function LogWorkoutTabs({
           {logMode === "ai" && (
             <div>
               <EstimateWorkout date={date} weightKg={weightKg} onApply={onApplyEstimate} />
-              <div className="mt-2 text-xs text-slate-400">
+              <div className="mt-2 text-xs text-gray-400">
                 Describe your workout and AI estimates calories burned.
               </div>
             </div>
@@ -118,12 +118,12 @@ export function LogWorkoutTabs({
               <input type="hidden" name="date" value={date} />
               <div className="grid gap-2 grid-cols-2">
                 <label className="grid gap-1 text-sm">
-                  <div className="text-xs text-slate-500">Exercise name</div>
-                  <input name="exerciseName" required placeholder="Bench press" className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm placeholder-slate-400" />
+                  <div className="text-xs font-medium text-gray-500">Exercise name</div>
+                  <input name="exerciseName" required placeholder="Bench press" className="rounded-xl border-0 bg-gray-100 px-3 py-2.5 text-sm placeholder-gray-400 focus:ring-2 focus:ring-brand-500" />
                 </label>
                 <label className="grid gap-1 text-sm">
-                  <div className="text-xs text-slate-500">Muscle group</div>
-                  <select name="muscleGroup" className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900">
+                  <div className="text-xs font-medium text-gray-500">Muscle group</div>
+                  <select name="muscleGroup" className="rounded-xl border-0 bg-gray-100 px-3 py-2.5 text-sm text-gray-900 focus:ring-2 focus:ring-brand-500">
                     <option value="">—</option>
                     {MUSCLE_GROUPS.map((g) => <option key={g} value={g.toLowerCase()}>{g}</option>)}
                   </select>
@@ -131,27 +131,27 @@ export function LogWorkoutTabs({
               </div>
               <div className="grid gap-2 grid-cols-5">
                 <label className="grid gap-1 text-sm">
-                  <div className="text-xs text-slate-500">Duration</div>
-                  <input name="durationMinutes" type="number" step="1" placeholder="min" className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm placeholder-slate-400" />
+                  <div className="text-xs font-medium text-gray-500">Duration</div>
+                  <input name="durationMinutes" type="number" step="1" placeholder="min" className="rounded-xl border-0 bg-gray-100 px-3 py-2.5 text-sm placeholder-gray-400 focus:ring-2 focus:ring-brand-500" />
                 </label>
                 <label className="grid gap-1 text-sm">
-                  <div className="text-xs text-slate-500">Sets</div>
-                  <input name="sets" type="number" step="1" className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm" />
+                  <div className="text-xs font-medium text-gray-500">Sets</div>
+                  <input name="sets" type="number" step="1" className="rounded-xl border-0 bg-gray-100 px-3 py-2.5 text-sm focus:ring-2 focus:ring-brand-500" />
                 </label>
                 <label className="grid gap-1 text-sm">
-                  <div className="text-xs text-slate-500">Reps</div>
-                  <input name="reps" type="number" step="1" className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm" />
+                  <div className="text-xs font-medium text-gray-500">Reps</div>
+                  <input name="reps" type="number" step="1" className="rounded-xl border-0 bg-gray-100 px-3 py-2.5 text-sm focus:ring-2 focus:ring-brand-500" />
                 </label>
                 <label className="grid gap-1 text-sm">
-                  <div className="text-xs text-slate-500">Weight</div>
-                  <input name="weightKg" type="number" step="0.5" placeholder="kg" className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm placeholder-slate-400" />
+                  <div className="text-xs font-medium text-gray-500">Weight</div>
+                  <input name="weightKg" type="number" step="0.5" placeholder="kg" className="rounded-xl border-0 bg-gray-100 px-3 py-2.5 text-sm placeholder-gray-400 focus:ring-2 focus:ring-brand-500" />
                 </label>
                 <label className="grid gap-1 text-sm">
-                  <div className="text-xs text-slate-500">Calories</div>
-                  <input name="caloriesBurned" type="number" step="1" required className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm" />
+                  <div className="text-xs font-medium text-gray-500">Cal</div>
+                  <input name="caloriesBurned" type="number" step="1" required className="rounded-xl border-0 bg-gray-100 px-3 py-2.5 text-sm focus:ring-2 focus:ring-brand-500" />
                 </label>
               </div>
-              <button className="w-full rounded-lg bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-800">
+              <button className="w-full rounded-xl bg-brand-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-brand-700 active:scale-[0.98] transition-all">
                 Add exercise
               </button>
             </form>

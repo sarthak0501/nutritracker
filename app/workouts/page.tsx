@@ -35,20 +35,12 @@ export default async function WorkoutsPage() {
 
   const totalBurned = entries.reduce((s, e) => s + e.caloriesBurned, 0);
 
-  // Fetch previous workout data (most recent entry per exercise, excluding today)
   const previousRaw = await prisma.workoutEntry.findMany({
     where: { userId: user.id, date: { not: today } },
     orderBy: { createdAt: "desc" },
-    select: {
-      exerciseName: true,
-      sets: true,
-      reps: true,
-      weightKg: true,
-      date: true,
-    },
+    select: { exerciseName: true, sets: true, reps: true, weightKg: true, date: true },
   });
 
-  // De-dup to most recent per exercise name
   const previousMap = new Map<string, typeof previousRaw[number]>();
   for (const p of previousRaw) {
     const key = p.exerciseName.toLowerCase();
@@ -56,7 +48,6 @@ export default async function WorkoutsPage() {
   }
   const previousWorkouts = Array.from(previousMap.values());
 
-  // Buddy workout data
   const buddyId = await getBuddyId(user.id);
   let buddyWorkouts: { exerciseName: string; muscleGroup: string | null; sets: number | null; reps: number | null; weightKg: number | null; caloriesBurned: number }[] = [];
   let buddyInfo: { username: string } | null = null;
@@ -77,37 +68,35 @@ export default async function WorkoutsPage() {
 
   return (
     <div className="space-y-4">
-      {/* Prompt to complete profile if missing key info */}
       {(!profile?.weightKg || !profile?.equipmentPreset) && (
-        <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm">
-          <span className="text-amber-800">
+        <div className="rounded-2xl bg-brand-50 p-4 text-sm">
+          <span className="text-brand-800 font-medium">
             {!profile?.weightKg && !profile?.equipmentPreset
               ? "Add your weight and equipment access in "
               : !profile?.weightKg
               ? "Add your weight in "
               : "Set your equipment access in "}
           </span>
-          <a href="/profile" className="font-medium text-amber-900 underline">Profile</a>
-          <span className="text-amber-800"> for better calorie estimates and workout recommendations.</span>
+          <a href="/profile" className="font-bold text-brand-600 underline underline-offset-2">Profile</a>
+          <span className="text-brand-800"> for better estimates and recommendations.</span>
         </div>
       )}
 
-      {/* Daily summary */}
       {entries.length > 0 && (
         <Card>
-          <div className="flex items-baseline justify-between">
-            <div className="text-sm text-slate-500">{today} · Workouts</div>
-            <div className="text-xl font-bold tabular-nums">
-              {round0(totalBurned)} <span className="text-sm font-normal text-slate-400">kcal burned</span>
+          <div className="flex items-center justify-between">
+            <div>
+              <div className="text-xs font-medium text-gray-400 uppercase tracking-wide">{today}</div>
+              <div className="text-sm text-gray-500 mt-0.5">{entries.length} exercise{entries.length !== 1 ? "s" : ""} logged</div>
             </div>
-          </div>
-          <div className="mt-1 text-sm text-slate-500">
-            {entries.length} exercise{entries.length !== 1 ? "s" : ""} logged today
+            <div className="text-right">
+              <div className="text-2xl font-extrabold tabular-nums text-blue-600">{round0(totalBurned)}</div>
+              <div className="text-xs text-gray-400">kcal burned</div>
+            </div>
           </div>
         </Card>
       )}
 
-      {/* Log workout / Get recommendations */}
       <Card title="Workouts">
         <LogWorkoutTabs
           date={today}
@@ -121,16 +110,15 @@ export default async function WorkoutsPage() {
         />
       </Card>
 
-      {/* Logged exercises */}
       {entries.length > 0 && (
         <Card title="Today's exercises">
           <div className="space-y-2">
             {entries.map((e) => (
-              <div key={e.id} className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+              <div key={e.id} className="rounded-xl bg-gray-50 p-3">
                 <div className="flex items-center justify-between gap-3">
                   <div className="min-w-0">
-                    <div className="text-sm font-medium">{e.exerciseName}</div>
-                    <div className="text-xs text-slate-500">
+                    <div className="text-sm font-semibold text-gray-800">{e.exerciseName}</div>
+                    <div className="text-xs text-gray-500 mt-0.5">
                       {e.muscleGroup && <span className="capitalize">{e.muscleGroup} · </span>}
                       {e.durationMinutes && <span>{e.durationMinutes} min · </span>}
                       {e.sets && e.reps && <span>{e.sets}×{e.reps} · </span>}
@@ -141,7 +129,9 @@ export default async function WorkoutsPage() {
                   </div>
                   <form action={deleteWorkoutEntry}>
                     <input type="hidden" name="id" value={e.id} />
-                    <button className="text-xs text-slate-400 hover:text-red-500">×</button>
+                    <button className="rounded-lg p-1.5 text-gray-300 hover:bg-red-50 hover:text-red-400 transition-colors">
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+                    </button>
                   </form>
                 </div>
               </div>
@@ -151,35 +141,26 @@ export default async function WorkoutsPage() {
       )}
 
       {entries.length === 0 && (
-        <div className="text-center py-6 text-sm text-slate-400">
-          No workouts logged today. Log exercises or get AI recommendations above.
+        <div className="text-center py-8 text-sm text-gray-400">
+          No workouts logged today. Get started above.
         </div>
       )}
 
-      {/* Buddy workout feed */}
       {buddyId && (
-        <div className="space-y-3">
-          <div className="flex items-center gap-2">
-            <span className="text-base font-semibold">{buddyInfo?.username ?? "Buddy"}'s Workout</span>
-          </div>
-
+        <Card title={`${buddyInfo?.username ?? "Buddy"}'s workout`}>
           {buddyWorkouts.length === 0 ? (
-            <Card>
-              <p className="text-sm text-slate-500">Your buddy hasn't logged any workouts today.</p>
-            </Card>
+            <p className="text-sm text-gray-400">Your buddy hasn't logged any workouts today.</p>
           ) : (
-            <Card>
+            <>
               <div className="flex items-baseline justify-between mb-3">
-                <div className="text-sm text-slate-500">Training load</div>
-                <div className="text-lg font-bold tabular-nums">
-                  {round0(buddyTotalBurned)} <span className="text-sm font-normal text-slate-400">kcal burned</span>
-                </div>
+                <span className="text-sm text-gray-500">{buddyWorkouts.length} exercises</span>
+                <span className="text-lg font-bold tabular-nums text-blue-600">{round0(buddyTotalBurned)} kcal</span>
               </div>
               <div className="space-y-2">
                 {buddyWorkouts.map((e, i) => (
-                  <div key={i} className="rounded-lg border border-slate-200 bg-slate-50 p-2.5">
-                    <div className="text-sm font-medium">{e.exerciseName}</div>
-                    <div className="text-xs text-slate-500">
+                  <div key={i} className="rounded-xl bg-gray-50 p-2.5">
+                    <div className="text-sm font-semibold text-gray-800">{e.exerciseName}</div>
+                    <div className="text-xs text-gray-500">
                       {e.muscleGroup && <span className="capitalize">{e.muscleGroup} · </span>}
                       {e.sets && e.reps && <span>{e.sets}×{e.reps} · </span>}
                       {e.weightKg && <span>{e.weightKg}kg · </span>}
@@ -188,9 +169,9 @@ export default async function WorkoutsPage() {
                   </div>
                 ))}
               </div>
-            </Card>
+            </>
           )}
-        </div>
+        </Card>
       )}
     </div>
   );
