@@ -11,10 +11,11 @@ import { prisma } from "@/lib/db";
 import { requireSession } from "@/lib/session";
 import { round0 } from "@/lib/nutrition";
 import { getBuddyId, getBuddyInfo } from "@/lib/buddy";
+import { todayIsoDate } from "@/lib/dates";
 
 export default async function WorkoutsPage() {
   const user = await requireSession();
-  const today = new Date().toISOString().slice(0, 10);
+  const today = todayIsoDate();
 
   const profile = await prisma.profile.findUnique({ where: { userId: user.id } });
 
