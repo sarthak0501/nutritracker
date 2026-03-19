@@ -25,10 +25,10 @@ async function main() {
   });
 
   const wife = await prisma.user.upsert({
-    where: { username: "partner" },
+    where: { username: "kavya" },
     update: {},
     create: {
-      username: "partner",
+      username: "kavya",
       passwordHash: await hash("REDACTED_PASSWORD"),
       profile: {
         create: {
@@ -48,7 +48,7 @@ async function main() {
     create: { requesterId: sarthak.id, addresseeId: wife.id, status: "ACCEPTED" },
   });
 
-  console.log("✅ Seeded users: sarthak / partner (both password: REDACTED_PASSWORD)");
+  console.log("✅ Seeded users: sarthak / kavya (both password: REDACTED_PASSWORD)");
   console.log("   They are already buddies!");
 }
 
