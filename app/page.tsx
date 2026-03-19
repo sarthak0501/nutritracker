@@ -1,5 +1,5 @@
 import { Card } from "@/components/Card";
-import { EstimateFromText } from "@/components/EstimateFromText";
+import { LogMealTabs } from "@/components/LogMealTabs";
 import {
   applyEstimatedMeal,
   createManualFoodAndLogEntry,
@@ -9,6 +9,7 @@ import { prisma } from "@/lib/db";
 import { addNutrients, round0, round1, safeNutrientsForEntry, type Nutrients } from "@/lib/nutrition";
 import { requireSession } from "@/lib/session";
 import { BuddyTodayFeed } from "@/components/BuddyTodayFeed";
+import Link from "next/link";
 
 const MEALS = [
   { key: "BREAKFAST", label: "Breakfast" },
@@ -49,6 +50,16 @@ export default async function TodayPage() {
 
   return (
     <div className="space-y-4">
+      {/* Prompt to set targets if no profile exists */}
+      {!profile && (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm">
+          <span className="text-amber-800">Set your daily nutrition targets to track progress.</span>
+          <Link href="/profile" className="ml-2 font-medium text-amber-900 underline">
+            Set targets →
+          </Link>
+        </div>
+      )}
+
       {/* Compact daily summary */}
       <Card>
         <div className="flex items-baseline justify-between">
@@ -68,63 +79,13 @@ export default async function TodayPage() {
         )}
       </Card>
 
-      {/* Log a meal — AI text estimator */}
+      {/* Log a meal — tabbed: AI Estimate | Manual Entry */}
       <Card title="Log a meal">
-        <EstimateFromText date={today} onApply={applyEstimatedMeal} />
-        <div className="mt-2 text-xs text-slate-400">
-          Describe what you ate and AI estimates the macros.
-        </div>
-
-        {/* Manual entry — collapsed by default */}
-        <details className="mt-4 border-t border-slate-100 pt-3">
-          <summary className="text-xs text-slate-400 cursor-pointer hover:text-slate-600">
-            Manual entry
-          </summary>
-          <form action={createManualFoodAndLogEntry} className="mt-3 grid gap-3">
-            <input type="hidden" name="date" value={today} />
-            <div className="grid gap-2 grid-cols-2">
-              <label className="grid gap-1 text-sm">
-                <div className="text-xs text-slate-500">Meal</div>
-                <select name="mealType" className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900">
-                  {MEALS.map((m) => <option key={m.key} value={m.key}>{m.label}</option>)}
-                  <option value="CUSTOM">Custom</option>
-                </select>
-              </label>
-              <label className="grid gap-1 text-sm">
-                <div className="text-xs text-slate-500">Food name</div>
-                <input name="name" placeholder="Greek yogurt" className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm placeholder-slate-400" />
-              </label>
-            </div>
-            <div className="grid gap-2 grid-cols-3">
-              <label className="grid gap-1 text-sm">
-                <div className="text-xs text-slate-500">Amount</div>
-                <input name="amount" type="number" inputMode="decimal" step="0.1" defaultValue={100} className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm" />
-              </label>
-              <label className="grid gap-1 text-sm">
-                <div className="text-xs text-slate-500">kcal/100g</div>
-                <input name="kcalPer100g" type="number" inputMode="decimal" step="0.1" className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm" />
-              </label>
-              <label className="grid gap-1 text-sm">
-                <div className="text-xs text-slate-500">Protein</div>
-                <input name="proteinPer100g" type="number" inputMode="decimal" step="0.1" className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm" />
-              </label>
-            </div>
-            <div className="grid gap-2 grid-cols-3">
-              <label className="grid gap-1 text-sm">
-                <div className="text-xs text-slate-500">Carbs</div>
-                <input name="carbsPer100g" type="number" inputMode="decimal" step="0.1" className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm" />
-              </label>
-              <label className="grid gap-1 text-sm">
-                <div className="text-xs text-slate-500">Fat</div>
-                <input name="fatPer100g" type="number" inputMode="decimal" step="0.1" className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm" />
-              </label>
-              <div className="flex items-end">
-                <button className="w-full rounded-lg bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-800">Add</button>
-              </div>
-            </div>
-            <input type="hidden" name="unit" value="GRAM" />
-          </form>
-        </details>
+        <LogMealTabs
+          date={today}
+          onApplyEstimate={applyEstimatedMeal}
+          manualAction={createManualFoodAndLogEntry}
+        />
       </Card>
 
       {/* Logged meals — only show meals that have entries */}
@@ -170,7 +131,7 @@ export default async function TodayPage() {
 
       {entries.length === 0 && (
         <div className="text-center py-6 text-sm text-slate-400">
-          No meals logged yet today. Describe what you ate above to get started.
+          No meals logged yet today. Use the form above to get started.
         </div>
       )}
 
