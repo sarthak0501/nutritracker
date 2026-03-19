@@ -9,12 +9,14 @@ export type Nutrients = {
   sodium_mg?: number;
 };
 
-export function round1(n: number) {
-  return Math.round(n * 10) / 10;
+/** Round to 1 decimal, strip trailing .0 */
+export function round1(n: number): string {
+  const v = Math.round(n * 10) / 10;
+  return v % 1 === 0 ? String(Math.round(v)) : v.toFixed(1);
 }
 
-export function round0(n: number) {
-  return Math.round(n);
+export function round0(n: number): string {
+  return String(Math.round(n));
 }
 
 export function addNutrients(a: Nutrients, b: Nutrients): Nutrients {
