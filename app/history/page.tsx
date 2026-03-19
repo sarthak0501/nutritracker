@@ -2,6 +2,7 @@ import { Card } from "@/components/Card";
 import { prisma } from "@/lib/db";
 import { addNutrients, round0, round1, safeNutrientsForEntry, type Nutrients } from "@/lib/nutrition";
 import { deleteLogEntry } from "@/app/actions/logging";
+import { deleteWorkoutEntry } from "@/app/actions/workout";
 import { requireSession } from "@/lib/session";
 import Link from "next/link";
 
@@ -49,11 +50,19 @@ export default async function HistoryPage({
   const date = params.date ?? today;
   const isToday = date === today;
 
-  const entries = await prisma.logEntry.findMany({
-    where: { userId: user.id, date },
-    include: { food: true },
-    orderBy: [{ mealType: "asc" }, { createdAt: "asc" }],
-  });
+  const [entries, workouts] = await Promise.all([
+    prisma.logEntry.findMany({
+      where: { userId: user.id, date },
+      include: { food: true },
+      orderBy: [{ mealType: "asc" }, { createdAt: "asc" }],
+    }),
+    prisma.workoutEntry.findMany({
+      where: { userId: user.id, date },
+      orderBy: { createdAt: "asc" },
+    }),
+  ]);
+
+  const totalBurned = workouts.reduce((s, e) => s + e.caloriesBurned, 0);
 
   const byMeal = new Map<string, typeof entries>();
   for (const e of entries) {
@@ -82,60 +91,90 @@ export default async function HistoryPage({
             Next →
           </Link>
         </div>
-        {entries.length > 0 && (
+        {(entries.length > 0 || workouts.length > 0) && (
           <div className="mt-3 grid grid-cols-2 gap-2 md:grid-cols-5">
             <NutrientPill label="Calories" value={`${round0(dayTotals.kcal)} kcal`} />
             <NutrientPill label="Protein" value={`${round1(dayTotals.protein_g)} g`} />
             <NutrientPill label="Carbs" value={`${round1(dayTotals.carbs_g)} g`} />
             <NutrientPill label="Fat" value={`${round1(dayTotals.fat_g)} g`} />
-            <NutrientPill label="Fiber" value={`${round1(dayTotals.fiber_g ?? 0)} g`} />
+            <NutrientPill label="Burned" value={`${round0(totalBurned)} kcal`} />
           </div>
         )}
       </Card>
 
-      {entries.length === 0 ? (
+      {/* Meals */}
+      {entries.length === 0 && workouts.length === 0 ? (
         <Card>
-          <div className="text-sm text-slate-400">No meals logged for this day.</div>
+          <div className="text-sm text-slate-400">Nothing logged for this day.</div>
         </Card>
       ) : (
-        Array.from(byMeal.entries()).map(([mealKey, mealEntries]) => {
-          const mealTotals = mealEntries.reduce((acc, e) => {
-            const n = safeNutrientsForEntry(e, e.food);
-            return n ? addNutrients(acc, n) : acc;
-          }, emptyTotals());
+        <>
+          {Array.from(byMeal.entries()).map(([mealKey, mealEntries]) => {
+            const mealTotals = mealEntries.reduce((acc, e) => {
+              const n = safeNutrientsForEntry(e, e.food);
+              return n ? addNutrients(acc, n) : acc;
+            }, emptyTotals());
 
-          return (
-            <Card key={mealKey} title={`${MEAL_LABELS[mealKey] ?? mealKey} · ${round0(mealTotals.kcal)} kcal`}>
-              <div className="space-y-2">
-                {mealEntries.map((e) => {
-                  const n = safeNutrientsForEntry(e, e.food);
-                  return (
-                    <div key={e.id} className="flex flex-col gap-2 rounded-lg border border-slate-200 bg-slate-50 p-3 md:flex-row md:items-center md:justify-between">
-                      <div className="min-w-0">
-                        <div className="truncate text-sm font-medium">
-                          {e.food.name}
-                          {e.food.brand && <span className="font-normal text-slate-400"> ({e.food.brand})</span>}
+            return (
+              <Card key={mealKey} title={`${MEAL_LABELS[mealKey] ?? mealKey} · ${round0(mealTotals.kcal)} kcal`}>
+                <div className="space-y-2">
+                  {mealEntries.map((e) => {
+                    const n = safeNutrientsForEntry(e, e.food);
+                    return (
+                      <div key={e.id} className="flex flex-col gap-2 rounded-lg border border-slate-200 bg-slate-50 p-3 md:flex-row md:items-center md:justify-between">
+                        <div className="min-w-0">
+                          <div className="truncate text-sm font-medium">
+                            {e.food.name}
+                            {e.food.brand && <span className="font-normal text-slate-400"> ({e.food.brand})</span>}
+                          </div>
+                          <div className="text-xs text-slate-500">
+                            {round1(e.amount)} {e.unit === "GRAM" ? "g" : "serving"}{e.isEstimated ? " · estimated" : ""}
+                          </div>
                         </div>
-                        <div className="text-xs text-slate-500">
-                          {round1(e.amount)} {e.unit === "GRAM" ? "g" : "serving"}{e.isEstimated ? " · estimated" : ""}
+                        <div className="flex items-center gap-3">
+                          <div className="text-xs text-slate-500 tabular-nums">
+                            {n ? <>{round0(n.kcal)} kcal · {round1(n.protein_g)}P / {round1(n.carbs_g)}C / {round1(n.fat_g)}F</> : "—"}
+                          </div>
+                          <form action={deleteLogEntry}>
+                            <input type="hidden" name="id" value={e.id} />
+                            <button className="rounded-lg border border-slate-200 px-2 py-1 text-xs text-slate-600 hover:bg-slate-100">Delete</button>
+                          </form>
                         </div>
                       </div>
-                      <div className="flex items-center gap-3">
-                        <div className="text-xs text-slate-500 tabular-nums">
-                          {n ? <>{round0(n.kcal)} kcal · {round1(n.protein_g)}P / {round1(n.carbs_g)}C / {round1(n.fat_g)}F</> : "—"}
-                        </div>
-                        <form action={deleteLogEntry}>
-                          <input type="hidden" name="id" value={e.id} />
-                          <button className="rounded-lg border border-slate-200 px-2 py-1 text-xs text-slate-600 hover:bg-slate-100">Delete</button>
-                        </form>
+                    );
+                  })}
+                </div>
+              </Card>
+            );
+          })}
+
+          {/* Workouts */}
+          {workouts.length > 0 && (
+            <Card title={`Workouts · ${round0(totalBurned)} kcal burned`}>
+              <div className="space-y-2">
+                {workouts.map((e) => (
+                  <div key={e.id} className="flex flex-col gap-2 rounded-lg border border-slate-200 bg-slate-50 p-3 md:flex-row md:items-center md:justify-between">
+                    <div className="min-w-0">
+                      <div className="text-sm font-medium">{e.exerciseName}</div>
+                      <div className="text-xs text-slate-500">
+                        {e.muscleGroup && <span className="capitalize">{e.muscleGroup} · </span>}
+                        {e.durationMinutes && <span>{e.durationMinutes} min · </span>}
+                        {e.sets && e.reps && <span>{e.sets}×{e.reps} · </span>}
+                        {e.weightKg && <span>{e.weightKg}kg · </span>}
+                        ~{round0(e.caloriesBurned)} kcal
+                        {e.isEstimated ? " · estimated" : ""}
                       </div>
                     </div>
-                  );
-                })}
+                    <form action={deleteWorkoutEntry}>
+                      <input type="hidden" name="id" value={e.id} />
+                      <button className="rounded-lg border border-slate-200 px-2 py-1 text-xs text-slate-600 hover:bg-slate-100">Delete</button>
+                    </form>
+                  </div>
+                ))}
               </div>
             </Card>
-          );
-        })
+          )}
+        </>
       )}
     </div>
   );
