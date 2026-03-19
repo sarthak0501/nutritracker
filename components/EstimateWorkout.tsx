@@ -51,23 +51,20 @@ export function EstimateWorkout({ date, weightKg, onApply }: Props) {
 
   return (
     <div className="grid gap-3">
-      <label className="grid gap-1 text-sm">
-        <div className="text-xs text-slate-500">Describe your workout</div>
-        <textarea
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-          placeholder="e.g., 30 min run, then 3x10 bench press at 80kg. I want to also hit shoulders."
-          rows={3}
-          className="rounded-lg border border-slate-300 bg-white px-3 py-2 placeholder-slate-400 resize-none text-sm"
-        />
-      </label>
+      <textarea
+        value={text}
+        onChange={(e) => setText(e.target.value)}
+        placeholder="e.g., 30 min run, then 3x10 bench press at 80kg"
+        rows={2}
+        className="rounded-lg border border-slate-300 bg-white px-3 py-2 placeholder-slate-400 resize-none text-sm"
+      />
 
       <button
         onClick={handleEstimate}
         disabled={isPending || !text.trim()}
         className="rounded-lg bg-slate-200 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-300 disabled:opacity-50"
       >
-        {isPending ? "Estimating…" : "Estimate calories"}
+        {isPending ? "Estimating..." : "Estimate & log"}
       </button>
 
       {error && (
@@ -85,7 +82,7 @@ export function EstimateWorkout({ date, weightKg, onApply }: Props) {
                 {ex.muscleGroup && <span className="capitalize">{ex.muscleGroup} · </span>}
                 {ex.durationMinutes && <span>{ex.durationMinutes} min · </span>}
                 {ex.sets && ex.reps && <span>{ex.sets}×{ex.reps} · </span>}
-                ~{Math.round(ex.caloriesBurned)} kcal burned
+                ~{Math.round(ex.caloriesBurned)} kcal
               </div>
             </div>
           ))}
@@ -95,23 +92,12 @@ export function EstimateWorkout({ date, weightKg, onApply }: Props) {
             <span className="font-medium">~{Math.round(totalCal)} kcal burned</span>
           </div>
 
-          {result.recommendations.length > 0 && (
-            <div className="rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm">
-              <div className="font-medium text-blue-800 mb-1">Recommended exercises</div>
-              <ul className="list-disc pl-4 text-blue-700 space-y-0.5">
-                {result.recommendations.map((r, i) => (
-                  <li key={i}>{r}</li>
-                ))}
-              </ul>
-            </div>
-          )}
-
           <button
             onClick={handleApply}
             disabled={isApplying}
             className="w-full rounded-lg bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-50"
           >
-            {isApplying ? "Saving…" : "Save workout"}
+            {isApplying ? "Saving..." : "Save workout"}
           </button>
         </div>
       )}

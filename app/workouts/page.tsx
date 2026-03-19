@@ -1,6 +1,12 @@
 import { Card } from "@/components/Card";
 import { LogWorkoutTabs } from "@/components/LogWorkoutTabs";
-import { applyEstimatedWorkout, createManualWorkoutEntry, deleteWorkoutEntry } from "@/app/actions/workout";
+import {
+  applyEstimatedWorkout,
+  createManualWorkoutEntry,
+  deleteWorkoutEntry,
+  addRecommendedExercise,
+  addAllRecommendedExercises,
+} from "@/app/actions/workout";
 import { prisma } from "@/lib/db";
 import { requireSession } from "@/lib/session";
 import { round0 } from "@/lib/nutrition";
@@ -10,7 +16,15 @@ export default async function WorkoutsPage() {
   const today = new Date().toISOString().slice(0, 10);
 
   const profile = await prisma.profile.findUnique({ where: { userId: user.id } });
-  const weightKg = profile?.weightKg ?? undefined;
+
+  const profileData = {
+    equipmentPreset: profile?.equipmentPreset ?? undefined,
+    equipment: profile?.equipment ?? undefined,
+    weightKg: profile?.weightKg ?? undefined,
+    heightCm: profile?.heightCm ?? undefined,
+    age: profile?.age ?? undefined,
+    gender: profile?.gender ?? undefined,
+  };
 
   const entries = await prisma.workoutEntry.findMany({
     where: { userId: user.id, date: today },
@@ -21,35 +35,46 @@ export default async function WorkoutsPage() {
 
   return (
     <div className="space-y-4">
-      {/* Prompt to set weight if missing */}
-      {!profile?.weightKg && (
+      {/* Prompt to complete profile if missing key info */}
+      {(!profile?.weightKg || !profile?.equipmentPreset) && (
         <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm">
-          <span className="text-amber-800">Add your weight in </span>
+          <span className="text-amber-800">
+            {!profile?.weightKg && !profile?.equipmentPreset
+              ? "Add your weight and equipment access in "
+              : !profile?.weightKg
+              ? "Add your weight in "
+              : "Set your equipment access in "}
+          </span>
           <a href="/profile" className="font-medium text-amber-900 underline">Profile</a>
-          <span className="text-amber-800"> for more accurate calorie burn estimates.</span>
+          <span className="text-amber-800"> for better calorie estimates and workout recommendations.</span>
         </div>
       )}
 
       {/* Daily summary */}
-      <Card>
-        <div className="flex items-baseline justify-between">
-          <div className="text-sm text-slate-500">{today} · Workouts</div>
-          <div className="text-xl font-bold tabular-nums">
-            {round0(totalBurned)} <span className="text-sm font-normal text-slate-400">kcal burned</span>
+      {entries.length > 0 && (
+        <Card>
+          <div className="flex items-baseline justify-between">
+            <div className="text-sm text-slate-500">{today} · Workouts</div>
+            <div className="text-xl font-bold tabular-nums">
+              {round0(totalBurned)} <span className="text-sm font-normal text-slate-400">kcal burned</span>
+            </div>
           </div>
-        </div>
-        <div className="mt-1 text-sm text-slate-500">
-          {entries.length} exercise{entries.length !== 1 ? "s" : ""} logged today
-        </div>
-      </Card>
+          <div className="mt-1 text-sm text-slate-500">
+            {entries.length} exercise{entries.length !== 1 ? "s" : ""} logged today
+          </div>
+        </Card>
+      )}
 
-      {/* Log workout */}
-      <Card title="Log a workout">
+      {/* Log workout / Get recommendations */}
+      <Card title="Workouts">
         <LogWorkoutTabs
           date={today}
-          weightKg={weightKg}
+          weightKg={profileData.weightKg}
+          profile={profileData}
           onApplyEstimate={applyEstimatedWorkout}
           manualAction={createManualWorkoutEntry}
+          onAddRecommended={addRecommendedExercise}
+          onAddAllRecommended={addAllRecommendedExercises}
         />
       </Card>
 
@@ -84,7 +109,7 @@ export default async function WorkoutsPage() {
 
       {entries.length === 0 && (
         <div className="text-center py-6 text-sm text-slate-400">
-          No workouts logged today. Describe your workout above to get started.
+          No workouts logged today. Log exercises or get AI recommendations above.
         </div>
       )}
     </div>

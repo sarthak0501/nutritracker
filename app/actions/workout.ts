@@ -3,7 +3,7 @@
 import { prisma } from "@/lib/db";
 import { revalidatePath } from "next/cache";
 import { requireSession } from "@/lib/session";
-import type { WorkoutEstimateResponse } from "@/lib/workout-llm";
+import type { WorkoutEstimateResponse, RecommendedExercise } from "@/lib/workout-llm";
 
 export async function createManualWorkoutEntry(formData: FormData) {
   const user = await requireSession();
@@ -59,6 +59,60 @@ export async function applyEstimatedWorkout(input: {
           confidence: ex.confidence,
           assumptions: ex.assumptions,
         },
+      },
+    });
+  }
+
+  revalidatePath("/");
+  revalidatePath("/workouts");
+}
+
+export async function addRecommendedExercise(input: {
+  date: string;
+  exercise: RecommendedExercise;
+}) {
+  const user = await requireSession();
+
+  await prisma.workoutEntry.create({
+    data: {
+      userId: user.id,
+      date: input.date,
+      exerciseName: input.exercise.exerciseName,
+      muscleGroup: input.exercise.muscleGroup,
+      durationMinutes: input.exercise.durationMinutes,
+      sets: input.exercise.sets,
+      reps: input.exercise.reps,
+      caloriesBurned: input.exercise.estimatedCalories,
+      isEstimated: true,
+      sourceText: "AI recommendation",
+      estimationMeta: { source: "recommendation", notes: input.exercise.notes },
+    },
+  });
+
+  revalidatePath("/");
+  revalidatePath("/workouts");
+}
+
+export async function addAllRecommendedExercises(input: {
+  date: string;
+  exercises: RecommendedExercise[];
+}) {
+  const user = await requireSession();
+
+  for (const exercise of input.exercises) {
+    await prisma.workoutEntry.create({
+      data: {
+        userId: user.id,
+        date: input.date,
+        exerciseName: exercise.exerciseName,
+        muscleGroup: exercise.muscleGroup,
+        durationMinutes: exercise.durationMinutes,
+        sets: exercise.sets,
+        reps: exercise.reps,
+        caloriesBurned: exercise.estimatedCalories,
+        isEstimated: true,
+        sourceText: "AI recommendation",
+        estimationMeta: { source: "recommendation", notes: exercise.notes },
       },
     });
   }
