@@ -1,19 +1,19 @@
-import type { NextAuthConfig } from "next-auth";
+import type { NextAuthConfig, Session } from "next-auth";
+import type { JWT } from "next-auth/jwt";
 
-// Lightweight config for middleware (no bcrypt/prisma imports)
 export const authConfig = {
   session: { strategy: "jwt" as const },
   pages: { signIn: "/login" },
   callbacks: {
-    jwt({ token, user }: { token: Record<string, unknown>; user?: { id?: string } }) {
+    jwt({ token, user }: { token: JWT; user?: { id?: string } }) {
       if (user) token.userId = user.id;
       return token;
     },
-    session({ session, token }: { session: Record<string, unknown> & { user: Record<string, unknown> }; token: Record<string, unknown> }) {
-      if (token.userId) session.user.id = token.userId;
+    session({ session, token }: { session: Session; token: JWT }) {
+      if (token.userId) session.user.id = token.userId as string;
       return session;
     },
-    authorized({ auth }: { auth: { user?: unknown } | null }) {
+    authorized({ auth }: { auth: Session | null }) {
       return !!auth?.user;
     },
   },
