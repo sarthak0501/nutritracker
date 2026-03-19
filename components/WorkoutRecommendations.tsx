@@ -16,6 +16,16 @@ const FOCUS_OPTIONS = [
   { value: "cardio", label: "Cardio" },
 ];
 
+type ExerciseWithWeight = RecommendedExercise & { userWeightKg?: number };
+
+type PreviousData = {
+  exerciseName: string;
+  sets: number | null;
+  reps: number | null;
+  weightKg: number | null;
+  date: string;
+};
+
 type Props = {
   date: string;
   profile: {
@@ -26,11 +36,12 @@ type Props = {
     age?: number;
     gender?: string;
   };
-  onAddExercise: (input: { date: string; exercise: RecommendedExercise }) => Promise<void>;
-  onAddAll: (input: { date: string; exercises: RecommendedExercise[] }) => Promise<void>;
+  previousWorkouts: PreviousData[];
+  onAddExercise: (input: { date: string; exercise: ExerciseWithWeight }) => Promise<void>;
+  onAddAll: (input: { date: string; exercises: ExerciseWithWeight[] }) => Promise<void>;
 };
 
-export function WorkoutRecommendations({ date, profile, onAddExercise, onAddAll }: Props) {
+export function WorkoutRecommendations({ date, profile, previousWorkouts, onAddExercise, onAddAll }: Props) {
   const [focus, setFocus] = useState("");
   const [customFocus, setCustomFocus] = useState("");
   const [result, setResult] = useState<WorkoutRecommendationResponse | null>(null);
@@ -39,13 +50,28 @@ export function WorkoutRecommendations({ date, profile, onAddExercise, onAddAll 
   const [addedIds, setAddedIds] = useState<Set<number>>(new Set());
   const [addingAll, startAddingAll] = useTransition();
 
+  // Per-exercise weight inputs and editable sets/reps
+  const [weights, setWeights] = useState<Record<number, string>>({});
+  const [editSets, setEditSets] = useState<Record<number, string>>({});
+  const [editReps, setEditReps] = useState<Record<number, string>>({});
+
   const activeFocus = focus === "custom" ? customFocus : focus;
+
+  // Find previous data for an exercise name
+  function findPrevious(name: string): PreviousData | undefined {
+    return previousWorkouts.find(
+      (p) => p.exerciseName.toLowerCase() === name.toLowerCase()
+    );
+  }
 
   function handleGenerate() {
     if (!activeFocus.trim()) return;
     setError(null);
     setResult(null);
     setAddedIds(new Set());
+    setWeights({});
+    setEditSets({});
+    setEditReps({});
     startTransition(async () => {
       const res = await fetch("/api/recommend-workout", {
         method: "POST",
@@ -65,23 +91,73 @@ export function WorkoutRecommendations({ date, profile, onAddExercise, onAddAll 
         setError(data?.error ?? "Failed to generate recommendations.");
         return;
       }
-      setResult(await res.json());
+      const data: WorkoutRecommendationResponse = await res.json();
+      setResult(data);
+
+      // Auto-populate from previous workouts
+      const newWeights: Record<number, string> = {};
+      const newSets: Record<number, string> = {};
+      const newReps: Record<number, string> = {};
+      data.exercises.forEach((ex, i) => {
+        const prev = findPrevious(ex.exerciseName);
+        if (prev) {
+          if (prev.weightKg) newWeights[i] = String(prev.weightKg);
+          if (prev.sets) newSets[i] = String(prev.sets);
+          if (prev.reps) newReps[i] = String(prev.reps);
+        }
+      });
+      setWeights(newWeights);
+      setEditSets(newSets);
+      setEditReps(newReps);
     });
   }
 
-  function handleAddExercise(exercise: RecommendedExercise, index: number) {
+  function getExerciseWithOverrides(ex: RecommendedExercise, i: number): ExerciseWithWeight {
+    const w = weights[i] ? Number(weights[i]) : undefined;
+    const s = editSets[i] ? Number(editSets[i]) : ex.sets;
+    const r = editReps[i] ? Number(editReps[i]) : ex.reps;
+    return { ...ex, sets: s, reps: r, userWeightKg: w };
+  }
+
+  function isWeightRequired(ex: RecommendedExercise): boolean {
+    // Cardio/bodyweight exercises don't need weight input
+    const noWeightKeywords = ["run", "jog", "walk", "plank", "crunch", "push-up", "pushup",
+      "pull-up", "pullup", "burpee", "jumping", "mountain climber", "stretch", "yoga",
+      "cycling", "bike", "swim", "skip", "rope"];
+    const name = ex.exerciseName.toLowerCase();
+    const group = (ex.muscleGroup ?? "").toLowerCase();
+    if (group === "cardio" || group === "core") return false;
+    return !noWeightKeywords.some((kw) => name.includes(kw));
+  }
+
+  function canLog(i: number, ex: RecommendedExercise): boolean {
+    if (!isWeightRequired(ex)) return true;
+    const w = weights[i];
+    return !!w && Number(w) > 0;
+  }
+
+  function canLogAll(): boolean {
+    if (!result) return false;
+    return result.exercises.every((ex, i) => addedIds.has(i) || canLog(i, ex));
+  }
+
+  function handleAddExercise(ex: RecommendedExercise, index: number) {
+    if (!canLog(index, ex)) return;
+    const withOverrides = getExerciseWithOverrides(ex, index);
     startTransition(async () => {
-      await onAddExercise({ date, exercise });
+      await onAddExercise({ date, exercise: withOverrides });
       setAddedIds((prev) => new Set(prev).add(index));
     });
   }
 
   function handleAddAll() {
-    if (!result) return;
-    const remaining = result.exercises.filter((_, i) => !addedIds.has(i));
-    if (remaining.length === 0) return;
+    if (!result || !canLogAll()) return;
+    const remaining = result.exercises
+      .map((ex, i) => ({ ex, i }))
+      .filter(({ i }) => !addedIds.has(i));
+    const exercisesWithOverrides = remaining.map(({ ex, i }) => getExerciseWithOverrides(ex, i));
     startAddingAll(async () => {
-      await onAddAll({ date, exercises: remaining });
+      await onAddAll({ date, exercises: exercisesWithOverrides });
       setAddedIds(new Set(result.exercises.map((_, i) => i)));
     });
   }
@@ -165,14 +241,18 @@ export function WorkoutRecommendations({ date, profile, onAddExercise, onAddAll 
           {/* Exercises */}
           {result.exercises.map((ex, i) => {
             const added = addedIds.has(i);
+            const needsWeight = isWeightRequired(ex);
+            const prev = findPrevious(ex.exerciseName);
+            const ready = canLog(i, ex);
+
             return (
-              <div key={i} className="rounded-lg border border-slate-200 bg-white p-3">
+              <div key={i} className="rounded-lg border border-slate-200 bg-white p-3 space-y-2">
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">
                     <div className="text-sm font-medium">{ex.exerciseName}</div>
                     <div className="text-xs text-slate-500">
                       <span className="capitalize">{ex.muscleGroup}</span>
-                      {" · "}{ex.sets}×{ex.reps}
+                      {" · "}{editSets[i] || ex.sets}×{editReps[i] || ex.reps}
                       {ex.restSeconds && <> · {ex.restSeconds}s rest</>}
                       {ex.durationMinutes && <> · ~{ex.durationMinutes} min</>}
                       {" · ~"}{Math.round(ex.estimatedCalories)} kcal
@@ -181,16 +261,68 @@ export function WorkoutRecommendations({ date, profile, onAddExercise, onAddAll 
                   </div>
                   <button
                     onClick={() => handleAddExercise(ex, i)}
-                    disabled={added || isPending}
+                    disabled={added || isPending || !ready}
                     className={`shrink-0 rounded-lg px-2.5 py-1 text-xs font-medium transition-colors ${
                       added
                         ? "bg-green-100 text-green-600"
-                        : "bg-slate-900 text-white hover:bg-slate-800 disabled:opacity-50"
+                        : ready
+                        ? "bg-slate-900 text-white hover:bg-slate-800 disabled:opacity-50"
+                        : "bg-slate-200 text-slate-400 cursor-not-allowed"
                     }`}
                   >
-                    {added ? "Added" : "+ Log"}
+                    {added ? "Logged" : "+ Log"}
                   </button>
                 </div>
+
+                {/* Previous history banner */}
+                {prev && !added && (
+                  <div className="rounded-md bg-blue-50 border border-blue-100 px-2.5 py-1.5 text-xs text-blue-700">
+                    Last: {prev.weightKg ? `${prev.weightKg}kg` : "—"} · {prev.sets ?? "—"}×{prev.reps ?? "—"} on {prev.date}
+                  </div>
+                )}
+
+                {/* Editable fields — only if not yet logged */}
+                {!added && (
+                  <div className="flex gap-2">
+                    {needsWeight && (
+                      <label className="grid gap-0.5 text-xs flex-1">
+                        <span className="text-slate-500">Weight (kg) *</span>
+                        <input
+                          type="number"
+                          step="0.5"
+                          value={weights[i] ?? ""}
+                          onChange={(e) => setWeights((p) => ({ ...p, [i]: e.target.value }))}
+                          placeholder={prev?.weightKg ? String(prev.weightKg) : "kg"}
+                          className={`rounded-md border px-2 py-1.5 text-sm ${
+                            needsWeight && !weights[i]
+                              ? "border-amber-300 bg-amber-50"
+                              : "border-slate-300 bg-white"
+                          }`}
+                        />
+                      </label>
+                    )}
+                    <label className="grid gap-0.5 text-xs w-16">
+                      <span className="text-slate-500">Sets</span>
+                      <input
+                        type="number"
+                        step="1"
+                        value={editSets[i] ?? ex.sets}
+                        onChange={(e) => setEditSets((p) => ({ ...p, [i]: e.target.value }))}
+                        className="rounded-md border border-slate-300 bg-white px-2 py-1.5 text-sm"
+                      />
+                    </label>
+                    <label className="grid gap-0.5 text-xs w-16">
+                      <span className="text-slate-500">Reps</span>
+                      <input
+                        type="number"
+                        step="1"
+                        value={editReps[i] ?? ex.reps}
+                        onChange={(e) => setEditReps((p) => ({ ...p, [i]: e.target.value }))}
+                        className="rounded-md border border-slate-300 bg-white px-2 py-1.5 text-sm"
+                      />
+                    </label>
+                  </div>
+                )}
               </div>
             );
           })}
@@ -205,10 +337,10 @@ export function WorkoutRecommendations({ date, profile, onAddExercise, onAddAll 
           {!allAdded && (
             <button
               onClick={handleAddAll}
-              disabled={addingAll || isPending}
+              disabled={addingAll || isPending || !canLogAll()}
               className="w-full rounded-lg bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-50"
             >
-              {addingAll ? "Adding all..." : "Log entire workout"}
+              {addingAll ? "Logging all..." : !canLogAll() ? "Enter weights to log workout" : "Log entire workout"}
             </button>
           )}
 

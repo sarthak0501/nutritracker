@@ -9,10 +9,21 @@ const MUSCLE_GROUPS = [
   "Chest", "Back", "Legs", "Shoulders", "Arms", "Core", "Cardio", "Full Body",
 ];
 
+type ExerciseWithWeight = RecommendedExercise & { userWeightKg?: number };
+
+type PreviousData = {
+  exerciseName: string;
+  sets: number | null;
+  reps: number | null;
+  weightKg: number | null;
+  date: string;
+};
+
 export function LogWorkoutTabs({
   date,
   weightKg,
   profile,
+  previousWorkouts,
   onApplyEstimate,
   manualAction,
   onAddRecommended,
@@ -28,14 +39,15 @@ export function LogWorkoutTabs({
     age?: number;
     gender?: string;
   };
+  previousWorkouts: PreviousData[];
   onApplyEstimate: (input: {
     date: string;
     estimate: WorkoutEstimateResponse;
     sourceText: string;
   }) => Promise<void>;
   manualAction: (formData: FormData) => Promise<void>;
-  onAddRecommended: (input: { date: string; exercise: RecommendedExercise }) => Promise<void>;
-  onAddAllRecommended: (input: { date: string; exercises: RecommendedExercise[] }) => Promise<void>;
+  onAddRecommended: (input: { date: string; exercise: ExerciseWithWeight }) => Promise<void>;
+  onAddAllRecommended: (input: { date: string; exercises: ExerciseWithWeight[] }) => Promise<void>;
 }) {
   const [tab, setTab] = useState<"log" | "recommend">("log");
   const [logMode, setLogMode] = useState<"ai" | "manual">("ai");
@@ -117,7 +129,7 @@ export function LogWorkoutTabs({
                   </select>
                 </label>
               </div>
-              <div className="grid gap-2 grid-cols-4">
+              <div className="grid gap-2 grid-cols-5">
                 <label className="grid gap-1 text-sm">
                   <div className="text-xs text-slate-500">Duration</div>
                   <input name="durationMinutes" type="number" step="1" placeholder="min" className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm placeholder-slate-400" />
@@ -129,6 +141,10 @@ export function LogWorkoutTabs({
                 <label className="grid gap-1 text-sm">
                   <div className="text-xs text-slate-500">Reps</div>
                   <input name="reps" type="number" step="1" className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm" />
+                </label>
+                <label className="grid gap-1 text-sm">
+                  <div className="text-xs text-slate-500">Weight</div>
+                  <input name="weightKg" type="number" step="0.5" placeholder="kg" className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm placeholder-slate-400" />
                 </label>
                 <label className="grid gap-1 text-sm">
                   <div className="text-xs text-slate-500">Calories</div>
@@ -147,6 +163,7 @@ export function LogWorkoutTabs({
         <WorkoutRecommendations
           date={date}
           profile={profile}
+          previousWorkouts={previousWorkouts}
           onAddExercise={onAddRecommended}
           onAddAll={onAddAllRecommended}
         />
