@@ -148,8 +148,6 @@ export async function applyEstimatedMeal(input: {
         fatPer100g: item.nutrients.fat_g * per100,
         fiberPer100g: item.nutrients.fiber_g != null ? item.nutrients.fiber_g * per100 : undefined,
         sodiumMgPer100g: item.nutrients.sodium_mg != null ? item.nutrients.sodium_mg * per100 : undefined,
-        servingGrams: 100,
-        servingName: item.unit,
       },
     });
 
@@ -160,7 +158,7 @@ export async function applyEstimatedMeal(input: {
         mealType,
         mealName: input.mealName,
         amount: item.quantity,
-        unit: "SERVING",
+        unit: "GRAM",
         foodId: food.id,
         isEstimated: true,
         sourceText: input.sourceText,
