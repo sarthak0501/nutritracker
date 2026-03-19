@@ -2,11 +2,11 @@ import { LoginForm } from "@/components/LoginForm";
 
 export default function LoginPage() {
   return (
-    <div className="flex min-h-screen items-center justify-center bg-slate-50 px-4">
+    <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-brand-50 to-gray-50 px-4">
       <div className="w-full max-w-sm">
         <div className="mb-8 text-center">
-          <div className="text-3xl font-bold text-slate-900">🥗 NutriTracker</div>
-          <div className="mt-2 text-sm text-slate-500">Sign in to continue</div>
+          <div className="text-4xl font-extrabold tracking-tight text-brand-600">NutriTracker</div>
+          <div className="mt-2 text-sm text-gray-500">Your nutrition & fitness companion</div>
         </div>
         <LoginForm />
       </div>

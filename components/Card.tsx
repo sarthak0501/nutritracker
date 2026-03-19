@@ -11,8 +11,8 @@ export function Card({
   className?: string;
 }) {
   return (
-    <div className={clsx("rounded-xl border border-slate-200 bg-white p-4 shadow-sm", className)}>
-      {title && <div className="mb-3 text-sm font-semibold text-slate-700">{title}</div>}
+    <div className={clsx("rounded-2xl bg-white p-5 shadow-sm", className)}>
+      {title && <div className="mb-3 text-[13px] font-bold uppercase tracking-wide text-gray-400">{title}</div>}
       {children}
     </div>
   );

@@ -21,22 +21,24 @@ export default async function RootLayout({ children }: { children: React.ReactNo
 
   return (
     <html lang="en">
-      <body className="min-h-screen bg-slate-50 text-slate-900 antialiased">
+      <body className="min-h-screen bg-gray-50 text-gray-900 antialiased">
         {username && (
-          <header className="border-b border-slate-200 bg-white/90 backdrop-blur sticky top-0 z-10">
-            <div className="mx-auto max-w-3xl px-4 py-3 flex items-center justify-between gap-2">
-              <div className="font-bold text-base shrink-0">🥗 NutriTracker</div>
-              <Nav />
+          <header className="bg-white sticky top-0 z-10 shadow-sm">
+            <div className="mx-auto max-w-3xl px-4 py-3 flex items-center justify-between">
+              <div className="font-extrabold text-lg tracking-tight text-brand-600">NutriTracker</div>
               <form action={logoutAction} className="shrink-0">
-                <button className="text-xs text-slate-400 hover:text-slate-700 whitespace-nowrap">
-                  {username} · out
+                <button className="rounded-full bg-gray-100 px-3 py-1 text-xs font-medium text-gray-500 hover:bg-gray-200 hover:text-gray-700 transition-colors">
+                  {username}
                 </button>
               </form>
             </div>
           </header>
         )}
         {username ? (
-          <main className="mx-auto max-w-3xl px-4 py-4 pb-24">{children}</main>
+          <>
+            <main className="mx-auto max-w-3xl px-4 py-4 pb-28">{children}</main>
+            <Nav />
+          </>
         ) : (
           <>{children}</>
         )}

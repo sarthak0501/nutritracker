@@ -66,7 +66,7 @@ export function ReactionBar({
   }
 
   return (
-    <div className="flex items-center gap-1 flex-wrap mt-2">
+    <div className="flex items-center gap-1.5 flex-wrap mt-2">
       {REACTIONS.map(({ type, emoji }) => {
         const count = countFor(type);
         const active = hasReacted(type);
@@ -75,14 +75,14 @@ export function ReactionBar({
             key={type}
             onClick={() => handleToggle(type)}
             title={REACTIONS.find(r => r.type === type)?.label}
-            className={`flex items-center gap-1 rounded-full px-2.5 py-1 text-xs transition-all ${
+            className={`flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium transition-all ${
               active
-                ? "bg-slate-200 text-slate-900 scale-110"
-                : "bg-slate-100 text-slate-500 hover:bg-slate-200 hover:text-slate-700"
+                ? "bg-brand-100 text-brand-700 scale-110 shadow-sm"
+                : "bg-gray-100 text-gray-400 hover:bg-gray-200 hover:text-gray-600"
             }`}
           >
             <span>{emoji}</span>
-            {count > 0 && <span className="tabular-nums font-medium">{count}</span>}
+            {count > 0 && <span className="tabular-nums font-bold">{count}</span>}
           </button>
         );
       })}

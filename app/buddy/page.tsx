@@ -27,19 +27,22 @@ export default async function BuddyPage() {
 
   return (
     <div className="space-y-4 max-w-lg mx-auto">
-      <h1 className="text-xl font-semibold">🤝 Buddies</h1>
+      <div>
+        <h1 className="text-xl font-bold">Buddies</h1>
+        <p className="text-sm text-gray-500 mt-1">Track progress together with friends</p>
+      </div>
 
       <Card title="Your buddies">
         {accepted.length === 0 ? (
-          <p className="text-sm text-slate-500">No buddies yet.</p>
+          <p className="text-sm text-gray-400">No buddies yet. Add one below!</p>
         ) : (
           <ul className="space-y-2">
             {accepted.map((b) => (
-              <li key={b.id} className="flex items-center justify-between rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
-                <span className="font-medium">{b.username}</span>
+              <li key={b.id} className="flex items-center justify-between rounded-xl bg-gray-50 px-4 py-3">
+                <span className="font-semibold text-gray-800">{b.username}</span>
                 <form action={removeBuddy}>
                   <input type="hidden" name="id" value={b.id} />
-                  <button className="text-xs text-slate-400 hover:text-red-500">Remove</button>
+                  <button className="text-xs text-gray-400 hover:text-red-500 transition-colors">Remove</button>
                 </form>
               </li>
             ))}
@@ -48,21 +51,21 @@ export default async function BuddyPage() {
       </Card>
 
       {pendingIncoming.length > 0 && (
-        <Card title="Incoming buddy requests">
+        <Card title="Incoming requests">
           <ul className="space-y-2">
             {pendingIncoming.map((r) => (
-              <li key={r.id} className="flex items-center justify-between rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
-                <span className="font-medium">{r.requester.username}</span>
+              <li key={r.id} className="flex items-center justify-between rounded-xl bg-gray-50 px-4 py-3">
+                <span className="font-semibold text-gray-800">{r.requester.username}</span>
                 <div className="flex gap-2">
                   <form action={respondToBuddyRequest}>
                     <input type="hidden" name="id" value={r.id} />
                     <input type="hidden" name="action" value="accept" />
-                    <button className="rounded bg-slate-900 px-2 py-1 text-xs font-medium text-white hover:bg-slate-800">Accept</button>
+                    <button className="rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-brand-700 transition-colors">Accept</button>
                   </form>
                   <form action={respondToBuddyRequest}>
                     <input type="hidden" name="id" value={r.id} />
                     <input type="hidden" name="action" value="decline" />
-                    <button className="rounded border border-slate-200 px-2 py-1 text-xs text-slate-500 hover:text-red-500">Decline</button>
+                    <button className="rounded-lg bg-gray-100 px-3 py-1.5 text-xs font-medium text-gray-500 hover:text-red-500 transition-colors">Decline</button>
                   </form>
                 </div>
               </li>
@@ -75,9 +78,9 @@ export default async function BuddyPage() {
         <Card title="Sent requests">
           <ul className="space-y-2">
             {pendingSent.map((r) => (
-              <li key={r.id} className="flex items-center justify-between rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
-                <span className="font-medium">{r.addressee.username}</span>
-                <span className="text-xs text-slate-400">Pending…</span>
+              <li key={r.id} className="flex items-center justify-between rounded-xl bg-gray-50 px-4 py-3">
+                <span className="font-semibold text-gray-800">{r.addressee.username}</span>
+                <span className="text-xs text-gray-400">Pending...</span>
               </li>
             ))}
           </ul>
@@ -89,10 +92,10 @@ export default async function BuddyPage() {
           <input
             name="username"
             placeholder="Username"
-            className="flex-1 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm placeholder-slate-400"
+            className="flex-1 rounded-xl border-0 bg-gray-100 px-4 py-2.5 text-sm placeholder-gray-400 focus:ring-2 focus:ring-brand-500"
           />
-          <button className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800">
-            Send request
+          <button className="rounded-xl bg-brand-600 px-5 py-2.5 text-sm font-bold text-white hover:bg-brand-700 active:scale-[0.98] transition-all">
+            Send
           </button>
         </form>
       </Card>
