@@ -3,7 +3,7 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
@@ -22,7 +22,55 @@ enum AmountUnit {
 
 enum FoodSource {
   MANUAL
+  OPEN_FOOD_FACTS
   LLM
+}
+
+enum BuddyStatus {
+  PENDING
+  ACCEPTED
+  DECLINED
+}
+
+enum ReactionType {
+  THUMBS_UP
+  THUMBS_DOWN
+  FIRE
+  MUSCLE
+}
+
+model User {
+  id           String   @id @default(cuid())
+  username     String   @unique
+  passwordHash String
+
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  profile      Profile?
+  logEntries   LogEntry[]
+
+  buddyRequestsSent     BuddyRelationship[] @relation("Requester")
+  buddyRequestsReceived BuddyRelationship[] @relation("Addressee")
+
+  reactionsGiven Reaction[]
+
+  @@index([username])
+}
+
+model Profile {
+  id            String   @id @default(cuid())
+  userId        String   @unique
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  kcalTarget    Float    @default(2000)
+  proteinTarget Float    @default(120)
+  carbsTarget   Float    @default(250)
+  fatTarget     Float    @default(70)
+  fiberTarget   Float?   @default(30)
+
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 }
 
 model Food {
@@ -30,6 +78,10 @@ model Food {
   name            String
   brand           String?
   source          FoodSource @default(MANUAL)
+
+  barcode         String?    @unique
+  offUrl          String?
+  offLastFetchedAt DateTime?
 
   kcalPer100g     Float
   proteinPer100g  Float
@@ -52,7 +104,9 @@ model Food {
 model LogEntry {
   id             String     @id @default(cuid())
 
-  /// YYYY-MM-DD (local date)
+  userId         String
+  user           User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+
   date           String
   mealType       MealType
   mealName       String?
@@ -67,24 +121,45 @@ model LogEntry {
   foodId         String
   food           Food       @relation(fields: [foodId], references: [id], onDelete: Cascade)
 
+  reactions      Reaction[]
+
   createdAt      DateTime   @default(now())
   updatedAt      DateTime   @updatedAt
 
   @@index([date])
+  @@index([userId, date])
   @@index([mealType, date])
 }
 
-model Profile {
-  /// Single-row profile (local-only MVP)
-  id            Int      @id @default(1)
+model BuddyRelationship {
+  id          String      @id @default(cuid())
+  requesterId String
+  addresseeId String
+  status      BuddyStatus @default(PENDING)
 
-  kcalTarget    Float    @default(2000)
-  proteinTarget Float    @default(120)
-  carbsTarget   Float    @default(250)
-  fatTarget     Float    @default(70)
-  fiberTarget   Float?   @default(30)
+  requester   User        @relation("Requester", fields: [requesterId], references: [id], onDelete: Cascade)
+  addressee   User        @relation("Addressee", fields: [addresseeId], references: [id], onDelete: Cascade)
 
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  @@unique([requesterId, addresseeId])
+  @@index([addresseeId, status])
+  @@index([requesterId, status])
 }
 
+model Reaction {
+  id         String       @id @default(cuid())
+  logEntryId String
+  userId     String
+  type       ReactionType
+
+  logEntry   LogEntry     @relation(fields: [logEntryId], references: [id], onDelete: Cascade)
+  user       User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt  DateTime     @default(now())
+
+  @@unique([logEntryId, userId, type])
+  @@index([logEntryId])
+  @@index([userId])
+}
