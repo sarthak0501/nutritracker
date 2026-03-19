@@ -6,7 +6,7 @@ const SECRET = new TextEncoder().encode(process.env.AUTH_SECRET ?? "fallback-sec
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
 
-  if (pathname.startsWith("/_next") || pathname.startsWith("/api/auth") || pathname.startsWith("/api/debug") || pathname === "/favicon.ico") {
+  if (pathname.startsWith("/_next") || pathname.startsWith("/api/auth") || pathname === "/favicon.ico") {
     return NextResponse.next();
   }
 
