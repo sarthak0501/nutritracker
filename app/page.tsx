@@ -9,6 +9,7 @@ import { prisma } from "@/lib/db";
 import { addNutrients, round0, round1, safeNutrientsForEntry, type Nutrients } from "@/lib/nutrition";
 import { requireSession } from "@/lib/session";
 import { BuddyTodayFeed } from "@/components/BuddyTodayFeed";
+import { todayIsoDate } from "@/lib/dates";
 import Link from "next/link";
 
 const MEALS = [
@@ -24,7 +25,7 @@ function emptyTotals(): Nutrients {
 
 export default async function TodayPage() {
   const user = await requireSession();
-  const today = new Date().toISOString().slice(0, 10);
+  const today = todayIsoDate();
 
   const profile = await prisma.profile.findUnique({ where: { userId: user.id } });
 

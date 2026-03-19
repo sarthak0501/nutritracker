@@ -1,11 +1,15 @@
+const TZ = "America/Los_Angeles";
+
+/** Current date in PST/PDT as YYYY-MM-DD */
 export function todayIsoDate(): string {
-  return new Date().toISOString().slice(0, 10);
+  return new Date().toLocaleDateString("en-CA", { timeZone: TZ });
 }
 
+/** Date N days ago in PST/PDT as YYYY-MM-DD */
 export function isoDaysBack(n: number): string {
   const d = new Date();
   d.setDate(d.getDate() - n);
-  return d.toISOString().slice(0, 10);
+  return d.toLocaleDateString("en-CA", { timeZone: TZ });
 }
 
 export function lastIsoDates(count: number): string[] {

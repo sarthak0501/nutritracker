@@ -4,6 +4,7 @@ import { addNutrients, round0, round1, safeNutrientsForEntry, type Nutrients } f
 import { deleteLogEntry } from "@/app/actions/logging";
 import { deleteWorkoutEntry } from "@/app/actions/workout";
 import { requireSession } from "@/lib/session";
+import { todayIsoDate } from "@/lib/dates";
 import Link from "next/link";
 
 function emptyTotals(): Nutrients {
@@ -46,7 +47,7 @@ export default async function HistoryPage({
 }) {
   const user = await requireSession();
   const params = await searchParams;
-  const today = new Date().toISOString().slice(0, 10);
+  const today = todayIsoDate();
   const date = params.date ?? today;
   const isToday = date === today;
 
