@@ -13,6 +13,7 @@ export async function createManualWorkoutEntry(formData: FormData) {
   const durationMinutes = formData.get("durationMinutes") ? Number(formData.get("durationMinutes")) : null;
   const sets = formData.get("sets") ? Number(formData.get("sets")) : null;
   const reps = formData.get("reps") ? Number(formData.get("reps")) : null;
+  const entryWeightKg = formData.get("weightKg") ? Number(formData.get("weightKg")) : null;
   const caloriesBurned = Number(formData.get("caloriesBurned"));
   const date = formData.get("date") as string;
 
@@ -27,6 +28,7 @@ export async function createManualWorkoutEntry(formData: FormData) {
       durationMinutes,
       sets,
       reps,
+      weightKg: entryWeightKg,
       caloriesBurned,
     },
   });
@@ -67,9 +69,11 @@ export async function applyEstimatedWorkout(input: {
   revalidatePath("/workouts");
 }
 
+type ExerciseWithWeight = RecommendedExercise & { userWeightKg?: number };
+
 export async function addRecommendedExercise(input: {
   date: string;
-  exercise: RecommendedExercise;
+  exercise: ExerciseWithWeight;
 }) {
   const user = await requireSession();
 
@@ -82,6 +86,7 @@ export async function addRecommendedExercise(input: {
       durationMinutes: input.exercise.durationMinutes,
       sets: input.exercise.sets,
       reps: input.exercise.reps,
+      weightKg: input.exercise.userWeightKg ?? null,
       caloriesBurned: input.exercise.estimatedCalories,
       isEstimated: true,
       sourceText: "AI recommendation",
@@ -95,7 +100,7 @@ export async function addRecommendedExercise(input: {
 
 export async function addAllRecommendedExercises(input: {
   date: string;
-  exercises: RecommendedExercise[];
+  exercises: ExerciseWithWeight[];
 }) {
   const user = await requireSession();
 
@@ -109,6 +114,7 @@ export async function addAllRecommendedExercises(input: {
         durationMinutes: exercise.durationMinutes,
         sets: exercise.sets,
         reps: exercise.reps,
+        weightKg: exercise.userWeightKg ?? null,
         caloriesBurned: exercise.estimatedCalories,
         isEstimated: true,
         sourceText: "AI recommendation",
