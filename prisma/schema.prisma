@@ -49,6 +49,7 @@ model User {
 
   profile      Profile?
   logEntries   LogEntry[]
+  workoutEntries WorkoutEntry[]
 
   buddyRequestsSent     BuddyRelationship[] @relation("Requester")
   buddyRequestsReceived BuddyRelationship[] @relation("Addressee")
@@ -68,6 +69,13 @@ model Profile {
   carbsTarget   Float    @default(250)
   fatTarget     Float    @default(70)
   fiberTarget   Float?   @default(30)
+
+  heightCm        Float?
+  weightKg        Float?
+  age             Int?
+  gender          String?
+  equipmentPreset String?
+  equipment       String[] @default([])
 
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
@@ -162,4 +170,29 @@ model Reaction {
   @@unique([logEntryId, userId, type])
   @@index([logEntryId])
   @@index([userId])
+}
+
+model WorkoutEntry {
+  id              String   @id @default(cuid())
+  userId          String
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  date            String
+  exerciseName    String
+  muscleGroup     String?
+  durationMinutes Float?
+  sets            Int?
+  reps            Int?
+  weightKg        Float?
+
+  caloriesBurned  Float
+  isEstimated     Boolean  @default(false)
+  sourceText      String?
+  estimationMeta  Json?
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([date])
+  @@index([userId, date])
 }
