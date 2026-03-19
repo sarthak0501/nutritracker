@@ -11,8 +11,8 @@ function emptyTotals(): Nutrients {
 
 function NutrientPill({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-lg border border-zinc-800 bg-zinc-950/30 px-3 py-2 text-sm">
-      <div className="text-xs text-zinc-400">{label}</div>
+    <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm">
+      <div className="text-xs text-slate-500">{label}</div>
       <div className="font-medium tabular-nums">{value}</div>
     </div>
   );
@@ -72,13 +72,13 @@ export default async function HistoryPage({
       <Card>
         <div className="flex items-center justify-between gap-4">
           <Link href={`/history?date=${prevDate(date)}`}
-            className="rounded-lg border border-zinc-800 px-3 py-2 text-sm hover:bg-zinc-900">← Prev</Link>
+            className="rounded-lg border border-slate-200 px-3 py-2 text-sm hover:bg-slate-50">← Prev</Link>
           <div className="text-center">
             <div className="text-lg font-semibold">{date}</div>
-            {isToday && <div className="text-xs text-zinc-400">Today</div>}
+            {isToday && <div className="text-xs text-slate-500">Today</div>}
           </div>
           <Link href={isToday ? "/history" : `/history?date=${nextDate(date)}`}
-            className={`rounded-lg border border-zinc-800 px-3 py-2 text-sm hover:bg-zinc-900 ${isToday ? "opacity-30 pointer-events-none" : ""}`}>
+            className={`rounded-lg border border-slate-200 px-3 py-2 text-sm hover:bg-slate-50 ${isToday ? "opacity-30 pointer-events-none" : ""}`}>
             Next →
           </Link>
         </div>
@@ -95,7 +95,7 @@ export default async function HistoryPage({
 
       {entries.length === 0 ? (
         <Card>
-          <div className="text-sm text-zinc-400">No meals logged for this day.</div>
+          <div className="text-sm text-slate-400">No meals logged for this day.</div>
         </Card>
       ) : (
         Array.from(byMeal.entries()).map(([mealKey, mealEntries]) => {
@@ -110,23 +110,23 @@ export default async function HistoryPage({
                 {mealEntries.map((e) => {
                   const n = safeNutrientsForEntry(e, e.food);
                   return (
-                    <div key={e.id} className="flex flex-col gap-2 rounded-lg border border-zinc-800 bg-zinc-950/20 p-3 md:flex-row md:items-center md:justify-between">
+                    <div key={e.id} className="flex flex-col gap-2 rounded-lg border border-slate-200 bg-slate-50 p-3 md:flex-row md:items-center md:justify-between">
                       <div className="min-w-0">
                         <div className="truncate text-sm font-medium">
                           {e.food.name}
-                          {e.food.brand && <span className="font-normal text-zinc-400"> ({e.food.brand})</span>}
+                          {e.food.brand && <span className="font-normal text-slate-400"> ({e.food.brand})</span>}
                         </div>
-                        <div className="text-xs text-zinc-400">
+                        <div className="text-xs text-slate-500">
                           {round1(e.amount)} {e.unit === "GRAM" ? "g" : "serving"}{e.isEstimated ? " · estimated" : ""}
                         </div>
                       </div>
                       <div className="flex items-center gap-3">
-                        <div className="text-xs text-zinc-400 tabular-nums">
+                        <div className="text-xs text-slate-500 tabular-nums">
                           {n ? <>{round0(n.kcal)} kcal · {round1(n.protein_g)}P / {round1(n.carbs_g)}C / {round1(n.fat_g)}F</> : "—"}
                         </div>
                         <form action={deleteLogEntry}>
                           <input type="hidden" name="id" value={e.id} />
-                          <button className="rounded-lg border border-zinc-800 px-2 py-1 text-xs text-zinc-200 hover:bg-zinc-900">Delete</button>
+                          <button className="rounded-lg border border-slate-200 px-2 py-1 text-xs text-slate-600 hover:bg-slate-100">Delete</button>
                         </form>
                       </div>
                     </div>

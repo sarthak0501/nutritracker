@@ -72,20 +72,20 @@ export default async function TrendsPage({
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <div className="text-lg font-semibold">Trends</div>
-            <div className="mt-1 text-sm text-zinc-400">
+            <div className="mt-1 text-sm text-slate-500">
               {range}-day view for calories, protein, and fiber.
             </div>
           </div>
           <div className="flex gap-2">
             <Link
               href="/trends?range=7"
-              className="rounded-lg border border-zinc-800 px-3 py-1.5 text-sm hover:bg-zinc-900"
+              className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm hover:bg-slate-50"
             >
               7d
             </Link>
             <Link
               href="/trends?range=30"
-              className="rounded-lg border border-zinc-800 px-3 py-1.5 text-sm hover:bg-zinc-900"
+              className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm hover:bg-slate-50"
             >
               30d
             </Link>
@@ -93,16 +93,16 @@ export default async function TrendsPage({
         </div>
 
         <div className="mt-3 grid gap-2 md:grid-cols-3">
-          <div className="rounded-lg border border-zinc-800 bg-zinc-950/20 p-3">
-            <div className="text-xs text-zinc-400">Avg calories</div>
+          <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+            <div className="text-xs text-slate-500">Avg calories</div>
             <div className="mt-1 text-lg font-semibold tabular-nums">{avg.kcal} kcal</div>
           </div>
-          <div className="rounded-lg border border-zinc-800 bg-zinc-950/20 p-3">
-            <div className="text-xs text-zinc-400">Avg protein</div>
+          <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+            <div className="text-xs text-slate-500">Avg protein</div>
             <div className="mt-1 text-lg font-semibold tabular-nums">{avg.protein} g</div>
           </div>
-          <div className="rounded-lg border border-zinc-800 bg-zinc-950/20 p-3">
-            <div className="text-xs text-zinc-400">Avg fiber</div>
+          <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+            <div className="text-xs text-slate-500">Avg fiber</div>
             <div className="mt-1 text-lg font-semibold tabular-nums">{avg.fiber} g</div>
           </div>
         </div>
