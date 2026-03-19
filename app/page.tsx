@@ -103,22 +103,35 @@ export default async function TodayPage() {
                 <div className="space-y-2">
                   {mealEntries.map((e) => {
                     const n = safeNutrientsForEntry(e, e.food);
+                    const reactions = (e.reactions ?? []) as { id: string; type: string; user: { username: string } }[];
                     return (
-                      <div key={e.id} className="flex items-center justify-between gap-3 rounded-lg border border-slate-200 bg-slate-50 p-3">
-                        <div className="min-w-0">
-                          <div className="truncate text-sm font-medium">
-                            {e.food.name}
-                            {e.food.brand && <span className="font-normal text-slate-400"> ({e.food.brand})</span>}
+                      <div key={e.id} className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+                        <div className="flex items-center justify-between gap-3">
+                          <div className="min-w-0">
+                            <div className="truncate text-sm font-medium">
+                              {e.food.name}
+                              {e.food.brand && <span className="font-normal text-slate-400"> ({e.food.brand})</span>}
+                            </div>
+                            <div className="text-xs text-slate-500 tabular-nums">
+                              {round1(e.amount)}{e.unit === "GRAM" ? "g" : " srv"}
+                              {n ? <> · {round0(n.kcal)} kcal · {round1(n.protein_g)}P / {round1(n.carbs_g)}C / {round1(n.fat_g)}F</> : ""}
+                            </div>
                           </div>
-                          <div className="text-xs text-slate-500 tabular-nums">
-                            {round1(e.amount)}{e.unit === "GRAM" ? "g" : " srv"}
-                            {n ? <> · {round0(n.kcal)} kcal · {round1(n.protein_g)}P / {round1(n.carbs_g)}C / {round1(n.fat_g)}F</> : ""}
-                          </div>
+                          <form action={deleteLogEntry}>
+                            <input type="hidden" name="id" value={e.id} />
+                            <button className="text-xs text-slate-400 hover:text-red-500">×</button>
+                          </form>
                         </div>
-                        <form action={deleteLogEntry}>
-                          <input type="hidden" name="id" value={e.id} />
-                          <button className="text-xs text-slate-400 hover:text-red-500">×</button>
-                        </form>
+                        {reactions.length > 0 && (
+                          <div className="mt-2 flex items-center gap-1 flex-wrap">
+                            {reactions.map((r) => (
+                              <span key={r.id} className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-600" title={`${r.user.username}`}>
+                                {r.type === "THUMBS_UP" ? "👍" : r.type === "THUMBS_DOWN" ? "👎" : r.type === "FIRE" ? "🔥" : "💪"}
+                                <span className="text-slate-400">{r.user.username}</span>
+                              </span>
+                            ))}
+                          </div>
+                        )}
                       </div>
                     );
                   })}
