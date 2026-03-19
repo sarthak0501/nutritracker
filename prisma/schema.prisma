@@ -3,7 +3,7 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
@@ -22,6 +22,7 @@ enum AmountUnit {
 
 enum FoodSource {
   MANUAL
+  OPEN_FOOD_FACTS
   LLM
 }
 
@@ -30,6 +31,10 @@ model Food {
   name            String
   brand           String?
   source          FoodSource @default(MANUAL)
+
+  barcode         String?    @unique
+  offUrl          String?
+  offLastFetchedAt DateTime?
 
   kcalPer100g     Float
   proteinPer100g  Float
@@ -75,7 +80,6 @@ model LogEntry {
 }
 
 model Profile {
-  /// Single-row profile (local-only MVP)
   id            Int      @id @default(1)
 
   kcalTarget    Float    @default(2000)
@@ -87,4 +91,3 @@ model Profile {
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 }
-
