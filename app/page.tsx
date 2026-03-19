@@ -28,6 +28,11 @@ export default async function TodayPage() {
 
   const profile = await prisma.profile.findUnique({ where: { userId: user.id } });
 
+  const workouts = await prisma.workoutEntry.findMany({
+    where: { userId: user.id, date: today },
+  });
+  const totalBurned = workouts.reduce((s, e) => s + e.caloriesBurned, 0);
+
   const entries = await prisma.logEntry.findMany({
     where: { userId: user.id, date: today },
     include: { food: true, reactions: { include: { user: { select: { id: true, username: true } } } } },
@@ -72,9 +77,14 @@ export default async function TodayPage() {
           <span>{round1(dayTotals.fat_g)}g fat</span>
           <span>{round1(dayTotals.fiber_g ?? 0)}g fiber</span>
         </div>
+        {totalBurned > 0 && (
+          <div className="mt-1.5 text-xs text-slate-500 tabular-nums">
+            🏋️ {round0(totalBurned)} kcal burned · Net: {round0(Number(dayTotals.kcal) - totalBurned)} kcal
+          </div>
+        )}
         {profile && (
           <div className="mt-1.5 text-xs text-slate-400 tabular-nums">
-            {round0(profile.kcalTarget - dayTotals.kcal)} kcal remaining · {round1(profile.proteinTarget - dayTotals.protein_g)}P / {round1(profile.carbsTarget - dayTotals.carbs_g)}C / {round1(profile.fatTarget - dayTotals.fat_g)}F
+            {round0(profile.kcalTarget - Number(dayTotals.kcal))} kcal remaining · {round1(profile.proteinTarget - Number(dayTotals.protein_g))}P / {round1(profile.carbsTarget - Number(dayTotals.carbs_g))}C / {round1(profile.fatTarget - Number(dayTotals.fat_g))}F
           </div>
         )}
       </Card>
