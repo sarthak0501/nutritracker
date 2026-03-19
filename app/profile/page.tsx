@@ -11,38 +11,38 @@ export default async function ProfilePage() {
     <div className="space-y-4 max-w-lg mx-auto">
       <div>
         <h1 className="text-xl font-semibold">Profile</h1>
-        <p className="text-sm text-zinc-400">Signed in as <span className="text-zinc-200 font-medium">{user.name}</span></p>
+        <p className="text-sm text-slate-500">Signed in as <span className="text-slate-800 font-medium">{user.name}</span></p>
       </div>
       <Card title="Daily Targets">
         <form action={updateProfile} className="grid gap-4">
           <label className="grid gap-1 text-sm">
-            <span className="text-xs text-zinc-400">Calories (kcal)</span>
+            <span className="text-xs text-slate-500">Calories (kcal)</span>
             <input name="kcalTarget" type="number" inputMode="decimal" defaultValue={profile?.kcalTarget ?? 2000}
-              className="rounded-lg border border-zinc-800 bg-zinc-950/30 px-3 py-2" />
+              className="rounded-lg border border-slate-300 bg-white px-3 py-2" />
           </label>
           <div className="grid grid-cols-2 gap-3">
             <label className="grid gap-1 text-sm">
-              <span className="text-xs text-zinc-400">Protein (g)</span>
+              <span className="text-xs text-slate-500">Protein (g)</span>
               <input name="proteinTarget" type="number" inputMode="decimal" defaultValue={profile?.proteinTarget ?? 120}
-                className="rounded-lg border border-zinc-800 bg-zinc-950/30 px-3 py-2" />
+                className="rounded-lg border border-slate-300 bg-white px-3 py-2" />
             </label>
             <label className="grid gap-1 text-sm">
-              <span className="text-xs text-zinc-400">Carbs (g)</span>
+              <span className="text-xs text-slate-500">Carbs (g)</span>
               <input name="carbsTarget" type="number" inputMode="decimal" defaultValue={profile?.carbsTarget ?? 250}
-                className="rounded-lg border border-zinc-800 bg-zinc-950/30 px-3 py-2" />
+                className="rounded-lg border border-slate-300 bg-white px-3 py-2" />
             </label>
             <label className="grid gap-1 text-sm">
-              <span className="text-xs text-zinc-400">Fat (g)</span>
+              <span className="text-xs text-slate-500">Fat (g)</span>
               <input name="fatTarget" type="number" inputMode="decimal" defaultValue={profile?.fatTarget ?? 70}
-                className="rounded-lg border border-zinc-800 bg-zinc-950/30 px-3 py-2" />
+                className="rounded-lg border border-slate-300 bg-white px-3 py-2" />
             </label>
             <label className="grid gap-1 text-sm">
-              <span className="text-xs text-zinc-400">Fiber (g)</span>
+              <span className="text-xs text-slate-500">Fiber (g)</span>
               <input name="fiberTarget" type="number" inputMode="decimal" defaultValue={profile?.fiberTarget ?? 30}
-                className="rounded-lg border border-zinc-800 bg-zinc-950/30 px-3 py-2" />
+                className="rounded-lg border border-slate-300 bg-white px-3 py-2" />
             </label>
           </div>
-          <button type="submit" className="rounded-lg bg-zinc-50 px-4 py-2 text-sm font-medium text-zinc-950 hover:bg-white">
+          <button type="submit" className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800">
             Save targets
           </button>
         </form>
