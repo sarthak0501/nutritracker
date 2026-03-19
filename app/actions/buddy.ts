@@ -7,11 +7,10 @@ import { revalidatePath } from "next/cache";
 export async function sendBuddyRequest(formData: FormData) {
   const user = await requireSession();
   const username = (formData.get("username") as string)?.trim();
-  if (!username) return { error: "Username required" };
+  if (!username) return;
 
   const target = await prisma.user.findUnique({ where: { username } });
-  if (!target) return { error: "User not found" };
-  if (target.id === user.id) return { error: "Cannot buddy yourself" };
+  if (!target || target.id === user.id) return;
 
   const existing = await prisma.buddyRelationship.findFirst({
     where: {
@@ -21,14 +20,13 @@ export async function sendBuddyRequest(formData: FormData) {
       ],
     },
   });
-  if (existing) return { error: "Buddy request already exists" };
+  if (existing) return;
 
   await prisma.buddyRelationship.create({
     data: { requesterId: user.id, addresseeId: target.id, status: "PENDING" },
   });
 
   revalidatePath("/buddy");
-  return { success: true };
 }
 
 export async function respondToBuddyRequest(formData: FormData) {
