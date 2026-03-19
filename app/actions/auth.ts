@@ -1,25 +1,30 @@
 "use server";
 
-import { signIn, signOut } from "@/auth";
-import { AuthError } from "next-auth";
+import { prisma } from "@/lib/db";
+import bcrypt from "bcryptjs";
+import { createSession, deleteSession } from "@/lib/auth-session";
+import { redirect } from "next/navigation";
 
 export async function loginAction(
   _prevState: string | null,
   formData: FormData
 ): Promise<string | null> {
-  try {
-    await signIn("credentials", {
-      username: formData.get("username") as string,
-      password: formData.get("password") as string,
-      redirectTo: "/",
-    });
-  } catch (e) {
-    if (e instanceof AuthError) return "Invalid username or password";
-    throw e; // re-throw NEXT_REDIRECT so Next.js handles it
-  }
-  return null;
+  const username = (formData.get("username") as string)?.trim();
+  const password = formData.get("password") as string;
+
+  if (!username || !password) return "Please enter username and password";
+
+  const user = await prisma.user.findUnique({ where: { username } });
+  if (!user) return "Invalid username or password";
+
+  const valid = await bcrypt.compare(password, user.passwordHash);
+  if (!valid) return "Invalid username or password";
+
+  await createSession({ id: user.id, username: user.username });
+  redirect("/");
 }
 
 export async function logoutAction() {
-  await signOut({ redirectTo: "/login" });
+  await deleteSession();
+  redirect("/login");
 }

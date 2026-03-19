@@ -1,7 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { Nav } from "@/components/Nav";
-import { auth } from "@/auth";
+import { getSession } from "@/lib/auth-session";
 import { logoutAction } from "@/app/actions/auth";
 
 export const metadata: Metadata = {
@@ -16,8 +16,8 @@ export const viewport: Viewport = {
 };
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
-  const session = await auth();
-  const username = session?.user?.name ?? null;
+  const session = await getSession();
+  const username = session?.username ?? null;
 
   return (
     <html lang="en" className="dark">
