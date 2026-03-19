@@ -84,25 +84,25 @@ export function LogMealTabs({
           <div className="grid gap-2 grid-cols-2">
             <label className="grid gap-1 text-sm">
               <div className="text-xs text-slate-500">Amount (g)</div>
-              <input name="amount" type="number" inputMode="decimal" step="0.1" required defaultValue={100} className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm" />
+              <input name="amount" type="number" step="1" required defaultValue={100} className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm" />
             </label>
             <label className="grid gap-1 text-sm">
               <div className="text-xs text-slate-500">Calories / 100g</div>
-              <input name="kcalPer100g" type="number" inputMode="decimal" step="0.1" required className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm" />
+              <input name="kcalPer100g" type="number" step="1" required className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm" />
             </label>
           </div>
           <div className="grid gap-2 grid-cols-3">
             <label className="grid gap-1 text-sm">
               <div className="text-xs text-slate-500">Protein / 100g</div>
-              <input name="proteinPer100g" type="number" inputMode="decimal" step="0.1" required className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm" />
+              <input name="proteinPer100g" type="number" step="1" required className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm" />
             </label>
             <label className="grid gap-1 text-sm">
               <div className="text-xs text-slate-500">Carbs / 100g</div>
-              <input name="carbsPer100g" type="number" inputMode="decimal" step="0.1" required className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm" />
+              <input name="carbsPer100g" type="number" step="1" required className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm" />
             </label>
             <label className="grid gap-1 text-sm">
               <div className="text-xs text-slate-500">Fat / 100g</div>
-              <input name="fatPer100g" type="number" inputMode="decimal" step="0.1" required className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm" />
+              <input name="fatPer100g" type="number" step="1" required className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm" />
             </label>
           </div>
           <input type="hidden" name="unit" value="GRAM" />

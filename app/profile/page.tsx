@@ -17,28 +17,28 @@ export default async function ProfilePage() {
         <form action={updateProfile} className="grid gap-4">
           <label className="grid gap-1 text-sm">
             <span className="text-xs text-slate-500">Calories (kcal)</span>
-            <input name="kcalTarget" type="number" inputMode="decimal" defaultValue={profile?.kcalTarget ?? 2000}
+            <input name="kcalTarget" type="number" step="1" defaultValue={Math.round(profile?.kcalTarget ?? 2000)}
               className="rounded-lg border border-slate-300 bg-white px-3 py-2" />
           </label>
           <div className="grid grid-cols-2 gap-3">
             <label className="grid gap-1 text-sm">
               <span className="text-xs text-slate-500">Protein (g)</span>
-              <input name="proteinTarget" type="number" inputMode="decimal" defaultValue={profile?.proteinTarget ?? 120}
+              <input name="proteinTarget" type="number" step="1" defaultValue={Math.round(profile?.proteinTarget ?? 120)}
                 className="rounded-lg border border-slate-300 bg-white px-3 py-2" />
             </label>
             <label className="grid gap-1 text-sm">
               <span className="text-xs text-slate-500">Carbs (g)</span>
-              <input name="carbsTarget" type="number" inputMode="decimal" defaultValue={profile?.carbsTarget ?? 250}
+              <input name="carbsTarget" type="number" step="1" defaultValue={Math.round(profile?.carbsTarget ?? 250)}
                 className="rounded-lg border border-slate-300 bg-white px-3 py-2" />
             </label>
             <label className="grid gap-1 text-sm">
               <span className="text-xs text-slate-500">Fat (g)</span>
-              <input name="fatTarget" type="number" inputMode="decimal" defaultValue={profile?.fatTarget ?? 70}
+              <input name="fatTarget" type="number" step="1" defaultValue={Math.round(profile?.fatTarget ?? 70)}
                 className="rounded-lg border border-slate-300 bg-white px-3 py-2" />
             </label>
             <label className="grid gap-1 text-sm">
               <span className="text-xs text-slate-500">Fiber (g)</span>
-              <input name="fiberTarget" type="number" inputMode="decimal" defaultValue={profile?.fiberTarget ?? 30}
+              <input name="fiberTarget" type="number" step="1" defaultValue={Math.round(profile?.fiberTarget ?? 30)}
                 className="rounded-lg border border-slate-300 bg-white px-3 py-2" />
             </label>
           </div>
