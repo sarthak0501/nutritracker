@@ -5,6 +5,8 @@ import {
   Line,
   BarChart,
   Bar,
+  AreaChart,
+  Area,
   XAxis,
   YAxis,
   Tooltip,
@@ -24,6 +26,11 @@ export type WorkoutTrendPoint = {
   caloriesBurned: number;
   exerciseCount: number;
   totalWeightKg: number;
+};
+
+export type WeightTrendPoint = {
+  date: string;
+  weightKg: number;
 };
 
 export function NutritionChart({ data }: { data: TrendPoint[] }) {
@@ -63,6 +70,42 @@ export function WorkoutChart({ data }: { data: WorkoutTrendPoint[] }) {
         <Bar dataKey="caloriesBurned" fill="#3b82f6" radius={[6, 6, 0, 0]} name="Calories burned" />
         <Bar dataKey="totalWeightKg" fill="#8b5cf6" radius={[6, 6, 0, 0]} name="Volume (kg)" />
       </BarChart>
+    </ResponsiveContainer>
+  );
+}
+
+export function WeightChart({ data }: { data: WeightTrendPoint[] }) {
+  const formatted = data.map((d) => ({ ...d, date: d.date.slice(5) }));
+  const weights = data.map((d) => d.weightKg);
+  const min = Math.floor(Math.min(...weights) - 1);
+  const max = Math.ceil(Math.max(...weights) + 1);
+
+  return (
+    <ResponsiveContainer width="100%" height={260}>
+      <AreaChart data={formatted} margin={{ top: 5, right: 10, left: -10, bottom: 5 }}>
+        <defs>
+          <linearGradient id="weightGradient" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="5%" stopColor="#8b5cf6" stopOpacity={0.3} />
+            <stop offset="95%" stopColor="#8b5cf6" stopOpacity={0} />
+          </linearGradient>
+        </defs>
+        <XAxis dataKey="date" tick={{ fontSize: 11, fill: "#9ca3af" }} />
+        <YAxis domain={[min, max]} tick={{ fontSize: 11, fill: "#9ca3af" }} />
+        <Tooltip
+          contentStyle={{ background: "#fff", border: "none", borderRadius: 12, boxShadow: "0 4px 12px rgba(0,0,0,0.08)" }}
+          labelStyle={{ color: "#6b7280", fontWeight: 600 }}
+          formatter={(value: number) => [`${value} kg`, "Weight"]}
+        />
+        <Area
+          type="monotone"
+          dataKey="weightKg"
+          stroke="#8b5cf6"
+          strokeWidth={2.5}
+          fill="url(#weightGradient)"
+          dot={{ r: 4, fill: "#8b5cf6", strokeWidth: 0 }}
+          name="Weight (kg)"
+        />
+      </AreaChart>
     </ResponsiveContainer>
   );
 }

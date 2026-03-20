@@ -3,8 +3,10 @@ import { Card } from "@/components/Card";
 import {
   NutritionChart,
   WorkoutChart,
+  WeightChart,
   type TrendPoint,
   type WorkoutTrendPoint,
+  type WeightTrendPoint,
 } from "@/components/TrendsChart";
 import { prisma } from "@/lib/db";
 import { addNutrients, safeNutrientsForEntry } from "@/lib/nutrition";
@@ -41,6 +43,12 @@ export default async function TrendsPage({
   // Fetch workout entries
   const workouts = await prisma.workoutEntry.findMany({
     where: { userId: user.id, date: { gte: fromDate } },
+  });
+
+  // Fetch weight entries
+  const weightEntries = await prisma.weightEntry.findMany({
+    where: { userId: user.id, date: { gte: fromDate } },
+    orderBy: { date: "asc" },
   });
 
   // --- Nutrition data ---
@@ -122,6 +130,17 @@ export default async function TrendsPage({
     volume: Math.round(workoutSum.volume / daysWithWorkout),
     activeDays: workoutData.filter((d) => d.caloriesBurned > 0).length,
   };
+
+  // --- Weight data ---
+  const weightData: WeightTrendPoint[] = weightEntries.map((w) => ({
+    date: w.date,
+    weightKg: toFixed1(w.weightKg),
+  }));
+
+  const weightChange =
+    weightData.length >= 2
+      ? toFixed1(weightData[weightData.length - 1].weightKg - weightData[0].weightKg)
+      : null;
 
   // --- Goal progress ---
   const hasGoals = !!profile;
@@ -251,6 +270,39 @@ export default async function TrendsPage({
         </div>
         <WorkoutChart data={workoutData} />
       </Card>
+
+      {/* Weight trend */}
+      {weightData.length > 0 && (
+        <Card title="Body Weight">
+          <div className="grid gap-2 md:grid-cols-3 mb-4">
+            <div className="rounded-xl bg-gray-50 p-3">
+              <div className="text-xs text-gray-500">Current</div>
+              <div className="mt-1 text-lg font-semibold tabular-nums">
+                {weightData[weightData.length - 1].weightKg} kg
+              </div>
+            </div>
+            {weightData.length >= 2 && (
+              <div className="rounded-xl bg-gray-50 p-3">
+                <div className="text-xs text-gray-500">First recorded</div>
+                <div className="mt-1 text-lg font-semibold tabular-nums">
+                  {weightData[0].weightKg} kg
+                </div>
+              </div>
+            )}
+            {weightChange !== null && (
+              <div className="rounded-xl bg-gray-50 p-3">
+                <div className="text-xs text-gray-500">Change</div>
+                <div className={`mt-1 text-lg font-semibold tabular-nums ${
+                  weightChange < 0 ? "text-green-600" : weightChange > 0 ? "text-amber-600" : "text-gray-600"
+                }`}>
+                  {weightChange > 0 ? "+" : ""}{weightChange} kg
+                </div>
+              </div>
+            )}
+          </div>
+          <WeightChart data={weightData} />
+        </Card>
+      )}
 
       {/* Weekly summary (for 30d view) */}
       {range === 30 && (

@@ -50,6 +50,7 @@ model User {
   profile      Profile?
   logEntries   LogEntry[]
   workoutEntries WorkoutEntry[]
+  weightEntries  WeightEntry[]
 
   buddyRequestsSent     BuddyRelationship[] @relation("Requester")
   buddyRequestsReceived BuddyRelationship[] @relation("Addressee")
@@ -170,6 +171,20 @@ model Reaction {
   @@unique([logEntryId, userId, type])
   @@index([logEntryId])
   @@index([userId])
+}
+
+model WeightEntry {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  weightKg  Float
+  date      String
+
+  createdAt DateTime @default(now())
+
+  @@unique([userId, date])
+  @@index([userId, date])
 }
 
 model WorkoutEntry {

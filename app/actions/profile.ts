@@ -4,6 +4,7 @@ import { prisma } from "@/lib/db";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { requireSession } from "@/lib/session";
+import { todayIsoDate } from "@/lib/dates";
 
 const ProfileSchema = z.object({
   kcalTarget: z.number().min(500).max(10000),
@@ -75,7 +76,18 @@ export async function updateBodyStats(formData: FormData) {
     create: { userId: user.id, ...parsed.data },
   });
 
+  // Record weight history when weight is provided
+  if (parsed.data.weightKg) {
+    const date = todayIsoDate();
+    await prisma.weightEntry.upsert({
+      where: { userId_date: { userId: user.id, date } },
+      update: { weightKg: parsed.data.weightKg },
+      create: { userId: user.id, date, weightKg: parsed.data.weightKg },
+    });
+  }
+
   revalidatePath("/");
   revalidatePath("/profile");
   revalidatePath("/workouts");
+  revalidatePath("/trends");
 }
