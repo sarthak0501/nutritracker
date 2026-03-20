@@ -1,5 +1,4 @@
 import { Card } from "@/components/Card";
-import { LogMealTabs } from "@/components/LogMealTabs";
 import {
   applyEstimatedMeal,
   createManualFoodAndLogEntry,
@@ -12,9 +11,8 @@ import { BuddyTodayFeed } from "@/components/BuddyTodayFeed";
 import { todayIsoDate, isoDaysBack } from "@/lib/dates";
 import { gradeMeal, gradeColor } from "@/lib/meal-scoring";
 import { WaterTracker } from "@/components/WaterTracker";
-import { CopyYesterdayMeal } from "@/components/CopyYesterdayMeal";
-import { FrequentMeals, type FrequentFood } from "@/components/FrequentMeals";
-import { MealSuggestion } from "@/components/MealSuggestion";
+import { LogSection } from "@/components/LogSection";
+import type { FrequentFood } from "@/components/FrequentMeals";
 import Link from "next/link";
 
 const MEAL_META: Record<string, { label: string; icon: string }> = {
@@ -58,7 +56,6 @@ export default async function TodayPage() {
 
   const totalBurned = workouts.reduce((s, e) => s + e.caloriesBurned, 0);
 
-  // --- Today's meals grouped ---
   const byMeal = new Map<string, typeof entries>();
   for (const e of entries) {
     const arr = byMeal.get(e.mealType) ?? [];
@@ -81,7 +78,7 @@ export default async function TodayPage() {
   const kcalPct = Math.min(100, Math.round((Number(dayTotals.kcal) / kcalTarget) * 100));
   const kcalDiff = kcalTarget - Number(dayTotals.kcal);
 
-  // --- Yesterday's meals for copy feature ---
+  // --- Yesterday's meals for copy ---
   const yesterdayByMeal = new Map<string, typeof yesterdayEntries>();
   for (const e of yesterdayEntries) {
     const arr = yesterdayByMeal.get(e.mealType) ?? [];
@@ -90,7 +87,7 @@ export default async function TodayPage() {
   }
 
   const copyableMeals = Array.from(yesterdayByMeal.entries())
-    .filter(([mealType]) => !byMeal.has(mealType)) // only show meals not yet logged today
+    .filter(([mealType]) => !byMeal.has(mealType))
     .map(([mealType, entries]) => {
       const totalKcal = entries.reduce((sum, e) => {
         const n = safeNutrientsForEntry(e, e.food);
@@ -106,7 +103,6 @@ export default async function TodayPage() {
     ? await prisma.food.findMany({ where: { id: { in: frequentFoodIds } } })
     : [];
 
-  // Get last logged amount/unit/mealType for each frequent food
   const frequentMeals: FrequentFood[] = [];
   for (const fg of frequentRaw) {
     const food = frequentFoods.find((f) => f.id === fg.foodId);
@@ -128,12 +124,11 @@ export default async function TodayPage() {
     });
   }
 
-  // --- Meal scoring: compute running totals ---
+  // --- Meal scoring ---
   const targets = profile
     ? { kcalTarget: profile.kcalTarget, proteinTarget: profile.proteinTarget, carbsTarget: profile.carbsTarget, fatTarget: profile.fatTarget, fiberTarget: profile.fiberTarget ?? 30 }
     : null;
 
-  // Build a map of "totals before each meal group" for grading
   const mealGrades = new Map<string, string>();
   if (targets) {
     let runningTotals = emptyTotals();
@@ -148,17 +143,16 @@ export default async function TodayPage() {
     }
   }
 
-  // --- Remaining macros for meal suggestions ---
   const remainingKcal = Math.max(0, (profile?.kcalTarget ?? 2000) - dayTotals.kcal);
   const remainingProtein = Math.max(0, (profile?.proteinTarget ?? 120) - dayTotals.protein_g);
   const remainingCarbs = Math.max(0, (profile?.carbsTarget ?? 250) - dayTotals.carbs_g);
   const remainingFat = Math.max(0, (profile?.fatTarget ?? 70) - dayTotals.fat_g);
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
       {/* Prompt to set targets */}
       {!profile && (
-        <div className="rounded-2xl bg-brand-50 p-4 text-sm">
+        <div className="rounded-2xl bg-brand-50/60 p-4 text-sm">
           <span className="text-brand-800 font-medium">Set your daily targets to track progress.</span>
           <Link href="/profile" className="ml-2 font-bold text-brand-600 underline underline-offset-2">
             Set up profile →
@@ -166,122 +160,103 @@ export default async function TodayPage() {
         </div>
       )}
 
-      {/* Daily summary — hero card */}
+      {/* ── Daily summary ── */}
       <Card>
-        <div className="flex items-center justify-between mb-4">
+        {/* Greeting + calorie ring */}
+        <div className="flex items-center justify-between mb-5">
           <div>
-            <div className="text-xs font-medium text-gray-400 uppercase tracking-wide">{today}</div>
-            <div className="text-lg font-bold text-gray-900 mt-0.5">Hi, {user.name}</div>
+            <div className="text-lg font-bold text-gray-900">Hi, {user.name}</div>
+            <div className="text-xs text-gray-400 mt-0.5">{today}</div>
           </div>
           <div className="relative flex items-center justify-center">
-            <svg className="w-16 h-16 -rotate-90" viewBox="0 0 36 36">
-              <circle cx="18" cy="18" r="15.5" fill="none" stroke="#f3f4f6" strokeWidth="3" />
+            <svg className="w-[72px] h-[72px] -rotate-90" viewBox="0 0 36 36">
+              <circle cx="18" cy="18" r="15.5" fill="none" stroke="#f3f4f6" strokeWidth="2.5" />
               <circle
                 cx="18" cy="18" r="15.5" fill="none"
                 stroke={kcalPct >= 100 ? "#ef4444" : "#10b981"}
-                strokeWidth="3"
+                strokeWidth="2.5"
                 strokeDasharray={`${kcalPct} ${100 - kcalPct}`}
                 strokeLinecap="round"
               />
             </svg>
             <div className="absolute text-center">
-              <div className="text-[11px] font-bold tabular-nums">{round0(dayTotals.kcal)}</div>
-              <div className="text-[8px] text-gray-400">kcal</div>
+              <div className="text-xs font-bold tabular-nums leading-tight">{round0(dayTotals.kcal)}</div>
+              <div className="text-[9px] text-gray-400 leading-tight">/ {round0(kcalTarget)}</div>
             </div>
           </div>
         </div>
 
-        {/* Macro bars */}
-        <div className="grid grid-cols-4 gap-3">
+        {/* Macro bars — compact */}
+        <div className="grid grid-cols-4 gap-4">
           {[
-            { label: "Protein", value: dayTotals.protein_g, target: profile?.proteinTarget, unit: "g", goalType: "min" as const },
-            { label: "Carbs", value: dayTotals.carbs_g, target: profile?.carbsTarget, unit: "g", goalType: "max" as const },
-            { label: "Fat", value: dayTotals.fat_g, target: profile?.fatTarget, unit: "g", goalType: "max" as const },
-            { label: "Fiber", value: dayTotals.fiber_g ?? 0, target: profile?.fiberTarget, unit: "g", goalType: "min" as const },
+            { label: "Protein", value: dayTotals.protein_g, target: profile?.proteinTarget, goalType: "min" as const },
+            { label: "Carbs", value: dayTotals.carbs_g, target: profile?.carbsTarget, goalType: "max" as const },
+            { label: "Fat", value: dayTotals.fat_g, target: profile?.fatTarget, goalType: "max" as const },
+            { label: "Fiber", value: dayTotals.fiber_g ?? 0, target: profile?.fiberTarget, goalType: "min" as const },
           ].map((m) => {
             const val = Number(m.value);
             const tgt = m.target ?? null;
             const pct = tgt ? Math.min(100, Math.round((val / tgt) * 100)) : 0;
-            const diff = tgt !== null ? tgt - val : null;
-            let barColor: string;
-            let statusText: string | null = null;
-            let statusColor: string;
-            if (tgt === null) {
-              barColor = "bg-gray-300";
-              statusColor = "";
-            } else if (m.goalType === "min") {
-              barColor = val >= tgt ? "bg-green-500" : "bg-orange-400";
-              statusText = diff! > 0 ? `${round1(diff!)}g left` : "✓";
-              statusColor = diff! > 0 ? "text-orange-500" : "text-green-500";
-            } else {
-              barColor = val > tgt ? "bg-red-500" : "bg-green-500";
-              statusText = diff! >= 0 ? `${round1(diff!)}g left` : `+${round1(-diff!)}g over`;
-              statusColor = diff! >= 0 ? "text-gray-400" : "text-red-500";
+
+            let barColor = "bg-gray-200";
+            if (tgt !== null) {
+              if (m.goalType === "min") {
+                barColor = val >= tgt ? "bg-brand-400" : "bg-brand-200";
+              } else {
+                barColor = val > tgt ? "bg-red-400" : "bg-brand-300";
+              }
             }
+
             return (
-              <div key={m.label} className="text-center">
-                <div className="text-xs font-bold tabular-nums text-gray-800">{round1(val)}{m.unit}</div>
-                <div className="mt-1 h-1.5 rounded-full bg-gray-100 overflow-hidden">
-                  <div className={`h-full rounded-full ${barColor}`} style={{ width: `${pct}%` }} />
+              <div key={m.label}>
+                <div className="flex items-baseline justify-between mb-1">
+                  <span className="text-[10px] text-gray-400">{m.label}</span>
+                  <span className="text-[10px] font-medium tabular-nums text-gray-500">
+                    {round1(val)}{tgt ? `/${round0(tgt)}` : ""}
+                  </span>
                 </div>
-                <div className="mt-1 text-[10px] text-gray-400">{m.label}</div>
-                {statusText && <div className={`text-[9px] font-medium tabular-nums ${statusColor}`}>{statusText}</div>}
+                <div className="h-1.5 rounded-full bg-gray-100 overflow-hidden">
+                  <div className={`h-full rounded-full transition-all ${barColor}`} style={{ width: `${pct}%` }} />
+                </div>
               </div>
             );
           })}
         </div>
 
-        {/* Bottom stats */}
-        <div className="mt-3 flex items-center justify-between text-xs text-gray-500">
+        {/* Status line */}
+        <div className="mt-3 flex items-center gap-3 text-xs text-gray-400">
           {kcalDiff >= 0
-            ? <span className="tabular-nums">{round0(kcalDiff)} kcal remaining</span>
-            : <span className="tabular-nums font-medium text-red-500">{round0(-kcalDiff)} kcal over</span>
+            ? <span className="tabular-nums">{round0(kcalDiff)} kcal left</span>
+            : <span className="tabular-nums text-red-400">{round0(-kcalDiff)} over</span>
           }
           {totalBurned > 0 && (
-            <span className="tabular-nums text-blue-600 font-medium">
-              {round0(totalBurned)} burned
-            </span>
+            <span className="tabular-nums text-blue-400">{round0(totalBurned)} burned</span>
           )}
         </div>
 
-        {/* Water tracker */}
-        <div className="mt-4 pt-3 border-t border-gray-100">
+        {/* Water — inline */}
+        <div className="mt-3 pt-3 border-t border-gray-50">
           <WaterTracker glasses={water?.glasses ?? 0} date={today} />
         </div>
       </Card>
 
-      {/* Copy yesterday's meals + Quick log frequent meals */}
-      {(copyableMeals.length > 0 || frequentMeals.length > 0) && (
-        <Card>
-          <div className="space-y-4">
-            <CopyYesterdayMeal meals={copyableMeals} fromDate={yesterday} toDate={today} />
-            <FrequentMeals foods={frequentMeals} date={today} />
-          </div>
-        </Card>
-      )}
+      {/* ── Log a meal (collapsed by default) ── */}
+      <LogSection
+        date={today}
+        onApplyEstimate={applyEstimatedMeal}
+        manualAction={createManualFoodAndLogEntry}
+        copyableMeals={copyableMeals}
+        yesterday={yesterday}
+        frequentMeals={frequentMeals}
+        remainingKcal={remainingKcal}
+        remainingProtein={remainingProtein}
+        remainingCarbs={remainingCarbs}
+        remainingFat={remainingFat}
+      />
 
-      {/* What should I eat? */}
-      <Card>
-        <MealSuggestion
-          remainingKcal={remainingKcal}
-          remainingProtein={remainingProtein}
-          remainingCarbs={remainingCarbs}
-          remainingFat={remainingFat}
-        />
-      </Card>
-
-      {/* Log a meal */}
-      <Card title="Log a meal">
-        <LogMealTabs
-          date={today}
-          onApplyEstimate={applyEstimatedMeal}
-          manualAction={createManualFoodAndLogEntry}
-        />
-      </Card>
-
-      {/* Logged meals with grades */}
+      {/* ── Logged meals ── */}
       {mealsWithEntries.length > 0 && (
-        <div className="space-y-3">
+        <div className="space-y-2">
           {mealsWithEntries.map((m) => {
             const mealEntries = m.entries;
             const mealTotals = mealEntries.reduce((acc, e) => {
@@ -292,66 +267,64 @@ export default async function TodayPage() {
             const grade = mealGrades.get(m.key);
 
             return (
-              <Card key={m.key}>
-                <div className="flex items-center justify-between mb-3">
+              <div key={m.key} className="rounded-2xl bg-white border border-gray-100 p-4">
+                <div className="flex items-center justify-between mb-2">
                   <div className="flex items-center gap-2">
-                    <span className="text-lg">{m.icon}</span>
-                    <span className="text-sm font-bold text-gray-800">{m.label}</span>
+                    <span>{m.icon}</span>
+                    <span className="text-sm font-semibold text-gray-700">{m.label}</span>
                     {grade && (
-                      <span className={`rounded-md px-1.5 py-0.5 text-[10px] font-bold ${gradeColor(grade as "A" | "B" | "C" | "D")}`}>
+                      <span className={`rounded px-1.5 py-0.5 text-[10px] font-bold leading-none ${gradeColor(grade as "A" | "B" | "C" | "D")}`}>
                         {grade}
                       </span>
                     )}
                   </div>
-                  <span className="text-sm font-semibold tabular-nums text-brand-600">{round0(mealTotals.kcal)} kcal</span>
+                  <span className="text-xs font-medium tabular-nums text-gray-400">{round0(mealTotals.kcal)} cal</span>
                 </div>
-                <div className="space-y-2">
+                <div className="space-y-1.5">
                   {mealEntries.map((e) => {
                     const n = safeNutrientsForEntry(e, e.food);
                     const reactions = (e.reactions ?? []) as { id: string; type: string; user: { username: string } }[];
                     return (
-                      <div key={e.id} className="rounded-xl bg-gray-50 p-3">
-                        <div className="flex items-center justify-between gap-3">
-                          <div className="min-w-0">
-                            <div className="truncate text-sm font-semibold text-gray-800">
-                              {e.food.name}
-                              {e.food.brand && <span className="font-normal text-gray-400"> ({e.food.brand})</span>}
-                            </div>
-                            <div className="text-xs text-gray-500 tabular-nums mt-0.5">
-                              {round1(e.amount)}{e.unit === "GRAM" ? "g" : " srv"}
-                              {n ? <> · {round0(n.kcal)} cal · {round1(n.protein_g)}P {round1(n.carbs_g)}C {round1(n.fat_g)}F</> : ""}
-                            </div>
+                      <div key={e.id} className="flex items-center justify-between gap-2 py-1.5 group">
+                        <div className="min-w-0">
+                          <div className="text-sm text-gray-700 truncate">
+                            {e.food.name}
+                            {e.food.brand && <span className="text-gray-300"> · {e.food.brand}</span>}
                           </div>
-                          <form action={deleteLogEntry}>
-                            <input type="hidden" name="id" value={e.id} />
-                            <button className="rounded-lg p-1.5 text-gray-300 hover:bg-red-50 hover:text-red-400 transition-colors">
-                              <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
-                            </button>
-                          </form>
+                          <div className="text-[11px] text-gray-400 tabular-nums">
+                            {round1(e.amount)}{e.unit === "GRAM" ? "g" : " srv"}
+                            {n ? <> · {round0(n.kcal)} · {round1(n.protein_g)}P {round1(n.carbs_g)}C {round1(n.fat_g)}F</> : ""}
+                          </div>
+                          {reactions.length > 0 && (
+                            <div className="mt-1 flex items-center gap-1 flex-wrap">
+                              {reactions.map((r) => (
+                                <span key={r.id} className="text-[11px] text-gray-400">
+                                  {r.type === "THUMBS_UP" ? "👍" : r.type === "THUMBS_DOWN" ? "👎" : r.type === "FIRE" ? "🔥" : "💪"}
+                                  {r.user.username}
+                                </span>
+                              ))}
+                            </div>
+                          )}
                         </div>
-                        {reactions.length > 0 && (
-                          <div className="mt-2 flex items-center gap-1 flex-wrap">
-                            {reactions.map((r) => (
-                              <span key={r.id} className="inline-flex items-center gap-1 rounded-full bg-white px-2 py-0.5 text-xs text-gray-600 shadow-sm">
-                                {r.type === "THUMBS_UP" ? "👍" : r.type === "THUMBS_DOWN" ? "👎" : r.type === "FIRE" ? "🔥" : "💪"}
-                                <span className="text-gray-400">{r.user.username}</span>
-                              </span>
-                            ))}
-                          </div>
-                        )}
+                        <form action={deleteLogEntry}>
+                          <input type="hidden" name="id" value={e.id} />
+                          <button className="rounded-lg p-1 text-gray-200 opacity-0 group-hover:opacity-100 hover:text-red-400 transition-all">
+                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+                          </button>
+                        </form>
                       </div>
                     );
                   })}
                 </div>
-              </Card>
+              </div>
             );
           })}
         </div>
       )}
 
       {entries.length === 0 && (
-        <div className="text-center py-8 text-sm text-gray-400">
-          No meals logged yet today. Start by adding your first meal above.
+        <div className="text-center py-6 text-sm text-gray-300">
+          No meals logged yet today.
         </div>
       )}
 
