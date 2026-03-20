@@ -1,6 +1,6 @@
 import { Card } from "@/components/Card";
 import { prisma } from "@/lib/db";
-import { updateProfile, updateBodyStats } from "@/app/actions/profile";
+import { updateProfile, updateBodyStats, updateHealthProfile } from "@/app/actions/profile";
 import { requireSession } from "@/lib/session";
 
 export default async function ProfilePage() {
@@ -101,6 +101,109 @@ export default async function ProfilePage() {
           </div>
           <button type="submit" className="rounded-xl bg-brand-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-brand-700 active:scale-[0.98] transition-all">
             Save targets
+          </button>
+        </form>
+      </Card>
+
+      <Card title="Health & Dietary Profile">
+        <form action={updateHealthProfile} className="grid gap-5">
+          <div className="grid gap-2">
+            <span className={labelClass}>Allergies</span>
+            {[
+              { value: "peanuts", label: "Peanuts" },
+              { value: "tree nuts", label: "Tree nuts" },
+              { value: "dairy", label: "Dairy" },
+              { value: "eggs", label: "Eggs" },
+              { value: "gluten/wheat", label: "Gluten / Wheat" },
+              { value: "soy", label: "Soy" },
+              { value: "shellfish", label: "Shellfish" },
+              { value: "fish", label: "Fish" },
+            ].map(({ value, label }) => (
+              <label key={value} className="flex items-center gap-2 text-sm cursor-pointer">
+                <input
+                  type="checkbox"
+                  name="allergies"
+                  value={value}
+                  defaultChecked={profile?.allergies?.includes(value)}
+                  className="rounded accent-brand-600"
+                />
+                {label}
+              </label>
+            ))}
+            <input
+              name="customAllergy"
+              placeholder="Other (comma-separated)"
+              defaultValue={profile?.allergies?.filter(a => !["peanuts","tree nuts","dairy","eggs","gluten/wheat","soy","shellfish","fish"].includes(a)).join(", ")}
+              className={inputClass + " mt-1"}
+            />
+          </div>
+
+          <div className="grid gap-2">
+            <span className={labelClass}>Dietary Restrictions</span>
+            {[
+              { value: "vegetarian", label: "Vegetarian" },
+              { value: "vegan", label: "Vegan" },
+              { value: "halal", label: "Halal" },
+              { value: "kosher", label: "Kosher" },
+              { value: "keto", label: "Keto" },
+              { value: "low-sodium", label: "Low sodium" },
+              { value: "low-sugar", label: "Low sugar" },
+              { value: "gluten-free", label: "Gluten-free" },
+            ].map(({ value, label }) => (
+              <label key={value} className="flex items-center gap-2 text-sm cursor-pointer">
+                <input
+                  type="checkbox"
+                  name="dietaryRestrictions"
+                  value={value}
+                  defaultChecked={profile?.dietaryRestrictions?.includes(value)}
+                  className="rounded accent-brand-600"
+                />
+                {label}
+              </label>
+            ))}
+            <input
+              name="customRestriction"
+              placeholder="Other (comma-separated)"
+              defaultValue={profile?.dietaryRestrictions?.filter(r => !["vegetarian","vegan","halal","kosher","keto","low-sodium","low-sugar","gluten-free"].includes(r)).join(", ")}
+              className={inputClass + " mt-1"}
+            />
+          </div>
+
+          <div className="grid gap-2">
+            <span className={labelClass}>Pre-existing Conditions</span>
+            {[
+              { value: "type 1 diabetes", label: "Type 1 Diabetes" },
+              { value: "type 2 diabetes", label: "Type 2 Diabetes" },
+              { value: "hypertension", label: "Hypertension (high blood pressure)" },
+              { value: "celiac disease", label: "Celiac Disease" },
+              { value: "IBS", label: "IBS (Irritable Bowel Syndrome)" },
+              { value: "high cholesterol", label: "High Cholesterol" },
+              { value: "lactose intolerance", label: "Lactose Intolerance" },
+              { value: "GERD", label: "GERD / Acid Reflux" },
+            ].map(({ value, label }) => (
+              <label key={value} className="flex items-center gap-2 text-sm cursor-pointer">
+                <input
+                  type="checkbox"
+                  name="healthConditions"
+                  value={value}
+                  defaultChecked={profile?.healthConditions?.includes(value)}
+                  className="rounded accent-brand-600"
+                />
+                {label}
+              </label>
+            ))}
+            <input
+              name="customCondition"
+              placeholder="Other (comma-separated)"
+              defaultValue={profile?.healthConditions?.filter(c => !["type 1 diabetes","type 2 diabetes","hypertension","celiac disease","IBS","high cholesterol","lactose intolerance","GERD"].includes(c)).join(", ")}
+              className={inputClass + " mt-1"}
+            />
+          </div>
+
+          <p className="text-xs text-gray-400">This information is used only to personalise your meal recommendations.</p>
+
+          <button type="submit" className="rounded-xl bg-brand-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-brand-700 active:scale-[0.98] transition-all">
+            Save health profile
           </button>
         </form>
       </Card>

@@ -79,6 +79,10 @@ model Profile {
   equipmentPreset String?
   equipment       String[] @default([])
 
+  allergies            String[] @default([])
+  dietaryRestrictions  String[] @default([])
+  healthConditions     String[] @default([])
+
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 }

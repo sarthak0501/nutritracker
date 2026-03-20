@@ -38,6 +38,30 @@ export async function updateProfile(formData: FormData) {
   revalidatePath("/profile");
 }
 
+export async function updateHealthProfile(formData: FormData) {
+  const user = await requireSession();
+
+  const allergies = formData.getAll("allergies") as string[];
+  const customAllergy = (formData.get("customAllergy") as string)?.trim();
+  if (customAllergy) allergies.push(...customAllergy.split(",").map((s) => s.trim()).filter(Boolean));
+
+  const dietaryRestrictions = formData.getAll("dietaryRestrictions") as string[];
+  const customRestriction = (formData.get("customRestriction") as string)?.trim();
+  if (customRestriction) dietaryRestrictions.push(...customRestriction.split(",").map((s) => s.trim()).filter(Boolean));
+
+  const healthConditions = formData.getAll("healthConditions") as string[];
+  const customCondition = (formData.get("customCondition") as string)?.trim();
+  if (customCondition) healthConditions.push(...customCondition.split(",").map((s) => s.trim()).filter(Boolean));
+
+  await prisma.profile.upsert({
+    where: { userId: user.id },
+    update: { allergies, dietaryRestrictions, healthConditions },
+    create: { userId: user.id, allergies, dietaryRestrictions, healthConditions },
+  });
+
+  revalidatePath("/profile");
+}
+
 const BodyStatsSchema = z.object({
   heightCm: z.number().min(50).max(300).optional(),
   weightKg: z.number().min(20).max(500).optional(),
