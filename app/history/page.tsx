@@ -120,22 +120,67 @@ export default async function HistoryPage({
             →
           </Link>
         </div>
-        {(entries.length > 0 || workouts.length > 0) && (
-          <div className="mt-4 grid grid-cols-3 gap-2 md:grid-cols-5">
-            {[
-              { label: "Calories", value: `${round0(dayTotals.kcal)}`, color: "text-gray-900" },
-              { label: "Protein", value: `${round1(dayTotals.protein_g)}g`, color: "text-blue-600" },
-              { label: "Carbs", value: `${round1(dayTotals.carbs_g)}g`, color: "text-amber-600" },
-              { label: "Fat", value: `${round1(dayTotals.fat_g)}g`, color: "text-rose-500" },
-              { label: "Burned", value: `${round0(totalBurned)}`, color: "text-blue-600" },
-            ].map(({ label, value, color }) => (
-              <div key={label} className="text-center rounded-xl bg-gray-50 px-2 py-2.5">
-                <div className={`text-sm font-bold tabular-nums ${color}`}>{value}</div>
-                <div className="text-[10px] text-gray-400 mt-0.5">{label}</div>
-              </div>
-            ))}
-          </div>
-        )}
+        {(entries.length > 0 || workouts.length > 0) && (() => {
+          const kcalTgt = profile?.kcalTarget ?? null;
+          const kcalDiff = kcalTgt !== null ? kcalTgt - Number(dayTotals.kcal) : null;
+          const proteinTgt = profile?.proteinTarget ?? null;
+          const proteinDiff = proteinTgt !== null ? proteinTgt - Number(dayTotals.protein_g) : null;
+          const carbsTgt = profile?.carbsTarget ?? null;
+          const carbsDiff = carbsTgt !== null ? carbsTgt - Number(dayTotals.carbs_g) : null;
+          const fatTgt = profile?.fatTarget ?? null;
+          const fatDiff = fatTgt !== null ? fatTgt - Number(dayTotals.fat_g) : null;
+          const fiberTgt = profile?.fiberTarget ?? null;
+          const fiberDiff = fiberTgt !== null ? fiberTgt - Number(dayTotals.fiber_g ?? 0) : null;
+          const statsItems = [
+            {
+              label: "Calories",
+              value: round0(dayTotals.kcal),
+              sub: kcalDiff !== null ? (kcalDiff >= 0 ? `${round0(kcalDiff)} left` : `+${round0(-kcalDiff)} over`) : null,
+              color: kcalDiff === null ? "text-gray-900" : kcalDiff >= 0 ? "text-green-600" : "text-red-500",
+              subColor: kcalDiff === null ? "text-gray-400" : kcalDiff >= 0 ? "text-gray-400" : "text-red-400",
+            },
+            {
+              label: "Protein",
+              value: `${round1(dayTotals.protein_g)}g`,
+              sub: proteinDiff !== null ? (proteinDiff <= 0 ? "✓" : `${round1(proteinDiff)}g left`) : null,
+              color: proteinDiff === null ? "text-blue-600" : proteinDiff <= 0 ? "text-green-600" : "text-orange-500",
+              subColor: proteinDiff === null ? "text-gray-400" : proteinDiff <= 0 ? "text-green-500" : "text-orange-400",
+            },
+            {
+              label: "Carbs",
+              value: `${round1(dayTotals.carbs_g)}g`,
+              sub: carbsDiff !== null ? (carbsDiff >= 0 ? `${round1(carbsDiff)}g left` : `+${round1(-carbsDiff)}g over`) : null,
+              color: carbsDiff === null ? "text-amber-600" : carbsDiff >= 0 ? "text-green-600" : "text-red-500",
+              subColor: carbsDiff === null ? "text-gray-400" : carbsDiff >= 0 ? "text-gray-400" : "text-red-400",
+            },
+            {
+              label: "Fat",
+              value: `${round1(dayTotals.fat_g)}g`,
+              sub: fatDiff !== null ? (fatDiff >= 0 ? `${round1(fatDiff)}g left` : `+${round1(-fatDiff)}g over`) : null,
+              color: fatDiff === null ? "text-rose-500" : fatDiff >= 0 ? "text-green-600" : "text-red-500",
+              subColor: fatDiff === null ? "text-gray-400" : fatDiff >= 0 ? "text-gray-400" : "text-red-400",
+            },
+            {
+              label: "Fiber",
+              value: `${round1(dayTotals.fiber_g ?? 0)}g`,
+              sub: fiberDiff !== null ? (fiberDiff <= 0 ? "✓" : `${round1(fiberDiff)}g left`) : null,
+              color: fiberDiff === null ? "text-green-600" : fiberDiff <= 0 ? "text-green-600" : "text-orange-500",
+              subColor: fiberDiff === null ? "text-gray-400" : fiberDiff <= 0 ? "text-green-500" : "text-orange-400",
+            },
+            { label: "Burned", value: round0(totalBurned), sub: null, color: "text-blue-600", subColor: "text-gray-400" },
+          ];
+          return (
+            <div className="mt-4 grid grid-cols-3 gap-2 md:grid-cols-6">
+              {statsItems.map(({ label, value, sub, color, subColor }) => (
+                <div key={label} className="text-center rounded-xl bg-gray-50 px-2 py-2.5">
+                  <div className={`text-sm font-bold tabular-nums ${color}`}>{value}</div>
+                  <div className="text-[10px] text-gray-400 mt-0.5">{label}</div>
+                  {sub && <div className={`text-[9px] font-medium tabular-nums mt-0.5 ${subColor}`}>{sub}</div>}
+                </div>
+              ))}
+            </div>
+          );
+        })()}
       </Card>
 
       {/* Add meal for this date */}
