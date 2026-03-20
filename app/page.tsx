@@ -12,12 +12,13 @@ import { BuddyTodayFeed } from "@/components/BuddyTodayFeed";
 import { todayIsoDate } from "@/lib/dates";
 import Link from "next/link";
 
-const MEALS = [
-  { key: "BREAKFAST", label: "Breakfast", icon: "🌅" },
-  { key: "LUNCH", label: "Lunch", icon: "☀️" },
-  { key: "DINNER", label: "Dinner", icon: "🌙" },
-  { key: "SNACK", label: "Snacks", icon: "🍎" },
-] as const;
+const MEAL_META: Record<string, { label: string; icon: string }> = {
+  BREAKFAST: { label: "Breakfast", icon: "🌅" },
+  LUNCH: { label: "Lunch", icon: "☀️" },
+  DINNER: { label: "Dinner", icon: "🌙" },
+  SNACK: { label: "Snacks", icon: "🍎" },
+  CUSTOM: { label: "Custom", icon: "✨" },
+};
 
 function emptyTotals(): Nutrients {
   return { kcal: 0, protein_g: 0, carbs_g: 0, fat_g: 0, fiber_g: 0, sodium_mg: 0 };
@@ -52,7 +53,11 @@ export default async function TodayPage() {
     return n ? addNutrients(acc, n) : acc;
   }, emptyTotals());
 
-  const mealsWithEntries = MEALS.filter((m) => (byMeal.get(m.key)?.length ?? 0) > 0);
+  const mealsWithEntries = Array.from(byMeal.entries()).map(([key, entries]) => ({
+    key,
+    entries,
+    ...(MEAL_META[key] ?? { label: key, icon: "🍽️" }),
+  }));
 
   const kcalTarget = profile?.kcalTarget ?? 2000;
   const kcalPct = Math.min(100, Math.round((Number(dayTotals.kcal) / kcalTarget) * 100));
@@ -140,7 +145,7 @@ export default async function TodayPage() {
       {mealsWithEntries.length > 0 && (
         <div className="space-y-3">
           {mealsWithEntries.map((m) => {
-            const mealEntries = byMeal.get(m.key)!;
+            const mealEntries = m.entries;
             const mealTotals = mealEntries.reduce((acc, e) => {
               const n = safeNutrientsForEntry(e, e.food);
               return n ? addNutrients(acc, n) : acc;
