@@ -61,7 +61,7 @@ export default async function TodayPage() {
 
   const kcalTarget = profile?.kcalTarget ?? 2000;
   const kcalPct = Math.min(100, Math.round((Number(dayTotals.kcal) / kcalTarget) * 100));
-  const kcalRemaining = Math.max(0, kcalTarget - Number(dayTotals.kcal));
+  const kcalDiff = kcalTarget - Number(dayTotals.kcal); // positive = remaining, negative = over
 
   return (
     <div className="space-y-4">
@@ -87,7 +87,7 @@ export default async function TodayPage() {
               <circle cx="18" cy="18" r="15.5" fill="none" stroke="#f3f4f6" strokeWidth="3" />
               <circle
                 cx="18" cy="18" r="15.5" fill="none"
-                stroke={kcalPct >= 100 ? "#f59e0b" : "#10b981"}
+                stroke={kcalPct >= 100 ? "#ef4444" : "#10b981"}
                 strokeWidth="3"
                 strokeDasharray={`${kcalPct} ${100 - kcalPct}`}
                 strokeLinecap="round"
@@ -103,19 +103,38 @@ export default async function TodayPage() {
         {/* Macro bars */}
         <div className="grid grid-cols-4 gap-3">
           {[
-            { label: "Protein", value: dayTotals.protein_g, target: profile?.proteinTarget, color: "bg-blue-500", unit: "g" },
-            { label: "Carbs", value: dayTotals.carbs_g, target: profile?.carbsTarget, color: "bg-amber-500", unit: "g" },
-            { label: "Fat", value: dayTotals.fat_g, target: profile?.fatTarget, color: "bg-rose-400", unit: "g" },
-            { label: "Fiber", value: dayTotals.fiber_g ?? 0, target: profile?.fiberTarget, color: "bg-green-500", unit: "g" },
+            { label: "Protein", value: dayTotals.protein_g, target: profile?.proteinTarget, unit: "g", goalType: "min" as const },
+            { label: "Carbs", value: dayTotals.carbs_g, target: profile?.carbsTarget, unit: "g", goalType: "max" as const },
+            { label: "Fat", value: dayTotals.fat_g, target: profile?.fatTarget, unit: "g", goalType: "max" as const },
+            { label: "Fiber", value: dayTotals.fiber_g ?? 0, target: profile?.fiberTarget, unit: "g", goalType: "min" as const },
           ].map((m) => {
-            const pct = m.target ? Math.min(100, Math.round((Number(m.value) / m.target) * 100)) : 0;
+            const val = Number(m.value);
+            const tgt = m.target ?? null;
+            const pct = tgt ? Math.min(100, Math.round((val / tgt) * 100)) : 0;
+            const diff = tgt !== null ? tgt - val : null; // positive = remaining, negative = over
+            let barColor: string;
+            let statusText: string | null = null;
+            let statusColor: string;
+            if (tgt === null) {
+              barColor = "bg-gray-300";
+              statusColor = "";
+            } else if (m.goalType === "min") {
+              barColor = val >= tgt ? "bg-green-500" : "bg-orange-400";
+              statusText = diff! > 0 ? `${round1(diff!)}g left` : "✓";
+              statusColor = diff! > 0 ? "text-orange-500" : "text-green-500";
+            } else {
+              barColor = val > tgt ? "bg-red-500" : "bg-green-500";
+              statusText = diff! >= 0 ? `${round1(diff!)}g left` : `+${round1(-diff!)}g over`;
+              statusColor = diff! >= 0 ? "text-gray-400" : "text-red-500";
+            }
             return (
               <div key={m.label} className="text-center">
-                <div className="text-xs font-bold tabular-nums text-gray-800">{round1(Number(m.value))}{m.unit}</div>
+                <div className="text-xs font-bold tabular-nums text-gray-800">{round1(val)}{m.unit}</div>
                 <div className="mt-1 h-1.5 rounded-full bg-gray-100 overflow-hidden">
-                  <div className={`h-full rounded-full ${m.color}`} style={{ width: `${pct}%` }} />
+                  <div className={`h-full rounded-full ${barColor}`} style={{ width: `${pct}%` }} />
                 </div>
                 <div className="mt-1 text-[10px] text-gray-400">{m.label}</div>
+                {statusText && <div className={`text-[9px] font-medium tabular-nums ${statusColor}`}>{statusText}</div>}
               </div>
             );
           })}
@@ -123,7 +142,10 @@ export default async function TodayPage() {
 
         {/* Bottom stats */}
         <div className="mt-3 flex items-center justify-between text-xs text-gray-500">
-          <span className="tabular-nums">{round0(kcalRemaining)} kcal remaining</span>
+          {kcalDiff >= 0
+            ? <span className="tabular-nums">{round0(kcalDiff)} kcal remaining</span>
+            : <span className="tabular-nums font-medium text-red-500">{round0(-kcalDiff)} kcal over</span>
+          }
           {totalBurned > 0 && (
             <span className="tabular-nums text-blue-600 font-medium">
               {round0(totalBurned)} burned
