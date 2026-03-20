@@ -8,6 +8,7 @@ import {
   type WorkoutTrendPoint,
   type WeightTrendPoint,
 } from "@/components/TrendsChart";
+import { WeeklySummary } from "@/components/WeeklySummary";
 import { prisma } from "@/lib/db";
 import { addNutrients, safeNutrientsForEntry } from "@/lib/nutrition";
 import { isoDaysBack, lastIsoDates } from "@/lib/dates";
@@ -301,6 +302,35 @@ export default async function TrendsPage({
             )}
           </div>
           <WeightChart data={weightData} />
+        </Card>
+      )}
+
+      {/* AI Weekly Summary (7d view) */}
+      {range === 7 && hasGoals && (
+        <Card title="AI Weekly Summary">
+          <WeeklySummary
+            days={days.map((d) => {
+              const t = totalsByDate.get(d) ?? empty();
+              return {
+                date: d,
+                kcal: Math.round(t.kcal),
+                protein: toFixed1(t.protein_g),
+                carbs: toFixed1(t.carbs_g),
+                fat: toFixed1(t.fat_g),
+                fiber: toFixed1(t.fiber_g ?? 0),
+              };
+            })}
+            targets={{
+              kcal: profile!.kcalTarget,
+              protein: profile!.proteinTarget,
+              carbs: profile!.carbsTarget,
+              fat: profile!.fatTarget,
+              fiber: profile!.fiberTarget,
+            }}
+            workoutDays={avgWorkout.activeDays}
+            totalBurned={workoutSum.burned}
+            weightChange={weightChange}
+          />
         </Card>
       )}
 

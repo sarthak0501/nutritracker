@@ -6,6 +6,7 @@ import { z } from "zod";
 import { MealType, AmountUnit } from "@prisma/client";
 import { requireSession } from "@/lib/session";
 import type { EstimateResponse } from "@/lib/llm";
+import { todayIsoDate, isoDaysBack } from "@/lib/dates";
 
 function parseNumber(v: FormDataEntryValue | null): number | null {
   if (!v) return null;
@@ -171,6 +172,63 @@ export async function applyEstimatedMeal(input: {
       },
     });
   }
+
+  revalidatePath("/");
+  revalidatePath("/history");
+}
+
+export async function copyMealFromDate(input: {
+  fromDate: string;
+  toDate: string;
+  mealType: string;
+}) {
+  const user = await requireSession();
+
+  const entries = await prisma.logEntry.findMany({
+    where: { userId: user.id, date: input.fromDate, mealType: input.mealType as MealType },
+    include: { food: true },
+  });
+
+  if (entries.length === 0) return;
+
+  for (const e of entries) {
+    await prisma.logEntry.create({
+      data: {
+        userId: user.id,
+        date: input.toDate,
+        mealType: e.mealType,
+        mealName: e.mealName,
+        amount: e.amount,
+        unit: e.unit,
+        foodId: e.foodId,
+        isEstimated: e.isEstimated,
+      },
+    });
+  }
+
+  revalidatePath("/");
+  revalidatePath("/history");
+}
+
+export async function quickLogFood(input: {
+  date: string;
+  foodId: string;
+  amount: number;
+  unit: string;
+  mealType: string;
+}) {
+  const user = await requireSession();
+
+  await prisma.logEntry.create({
+    data: {
+      userId: user.id,
+      date: input.date,
+      mealType: input.mealType as MealType,
+      amount: input.amount,
+      unit: input.unit as AmountUnit,
+      foodId: input.foodId,
+    },
+  });
 
   revalidatePath("/");
   revalidatePath("/history");

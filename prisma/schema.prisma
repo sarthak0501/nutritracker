@@ -51,6 +51,7 @@ model User {
   logEntries   LogEntry[]
   workoutEntries WorkoutEntry[]
   weightEntries  WeightEntry[]
+  waterEntries   WaterEntry[]
 
   buddyRequestsSent     BuddyRelationship[] @relation("Requester")
   buddyRequestsReceived BuddyRelationship[] @relation("Addressee")
@@ -182,6 +183,21 @@ model WeightEntry {
   date      String
 
   createdAt DateTime @default(now())
+
+  @@unique([userId, date])
+  @@index([userId, date])
+}
+
+model WaterEntry {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  date      String
+  glasses   Int      @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@unique([userId, date])
   @@index([userId, date])

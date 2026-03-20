@@ -9,7 +9,12 @@ import { prisma } from "@/lib/db";
 import { addNutrients, round0, round1, safeNutrientsForEntry, type Nutrients } from "@/lib/nutrition";
 import { requireSession } from "@/lib/session";
 import { BuddyTodayFeed } from "@/components/BuddyTodayFeed";
-import { todayIsoDate } from "@/lib/dates";
+import { todayIsoDate, isoDaysBack } from "@/lib/dates";
+import { gradeMeal, gradeColor } from "@/lib/meal-scoring";
+import { WaterTracker } from "@/components/WaterTracker";
+import { CopyYesterdayMeal } from "@/components/CopyYesterdayMeal";
+import { FrequentMeals, type FrequentFood } from "@/components/FrequentMeals";
+import { MealSuggestion } from "@/components/MealSuggestion";
 import Link from "next/link";
 
 const MEAL_META: Record<string, { label: string; icon: string }> = {
@@ -27,20 +32,33 @@ function emptyTotals(): Nutrients {
 export default async function TodayPage() {
   const user = await requireSession();
   const today = todayIsoDate();
+  const yesterday = isoDaysBack(1);
 
-  const profile = await prisma.profile.findUnique({ where: { userId: user.id } });
+  const [profile, workouts, entries, water, yesterdayEntries, frequentRaw] = await Promise.all([
+    prisma.profile.findUnique({ where: { userId: user.id } }),
+    prisma.workoutEntry.findMany({ where: { userId: user.id, date: today } }),
+    prisma.logEntry.findMany({
+      where: { userId: user.id, date: today },
+      include: { food: true, reactions: { include: { user: { select: { id: true, username: true } } } } },
+      orderBy: [{ mealType: "asc" }, { createdAt: "asc" }],
+    }),
+    prisma.waterEntry.findUnique({ where: { userId_date: { userId: user.id, date: today } } }),
+    prisma.logEntry.findMany({
+      where: { userId: user.id, date: yesterday },
+      include: { food: true },
+    }),
+    prisma.logEntry.groupBy({
+      by: ["foodId"],
+      where: { userId: user.id },
+      _count: { foodId: true },
+      orderBy: { _count: { foodId: "desc" } },
+      take: 8,
+    }),
+  ]);
 
-  const workouts = await prisma.workoutEntry.findMany({
-    where: { userId: user.id, date: today },
-  });
   const totalBurned = workouts.reduce((s, e) => s + e.caloriesBurned, 0);
 
-  const entries = await prisma.logEntry.findMany({
-    where: { userId: user.id, date: today },
-    include: { food: true, reactions: { include: { user: { select: { id: true, username: true } } } } },
-    orderBy: [{ mealType: "asc" }, { createdAt: "asc" }],
-  });
-
+  // --- Today's meals grouped ---
   const byMeal = new Map<string, typeof entries>();
   for (const e of entries) {
     const arr = byMeal.get(e.mealType) ?? [];
@@ -61,7 +79,80 @@ export default async function TodayPage() {
 
   const kcalTarget = profile?.kcalTarget ?? 2000;
   const kcalPct = Math.min(100, Math.round((Number(dayTotals.kcal) / kcalTarget) * 100));
-  const kcalDiff = kcalTarget - Number(dayTotals.kcal); // positive = remaining, negative = over
+  const kcalDiff = kcalTarget - Number(dayTotals.kcal);
+
+  // --- Yesterday's meals for copy feature ---
+  const yesterdayByMeal = new Map<string, typeof yesterdayEntries>();
+  for (const e of yesterdayEntries) {
+    const arr = yesterdayByMeal.get(e.mealType) ?? [];
+    arr.push(e);
+    yesterdayByMeal.set(e.mealType, arr);
+  }
+
+  const copyableMeals = Array.from(yesterdayByMeal.entries())
+    .filter(([mealType]) => !byMeal.has(mealType)) // only show meals not yet logged today
+    .map(([mealType, entries]) => {
+      const totalKcal = entries.reduce((sum, e) => {
+        const n = safeNutrientsForEntry(e, e.food);
+        return sum + (n?.kcal ?? 0);
+      }, 0);
+      const meta = MEAL_META[mealType] ?? { label: mealType, icon: "🍽️" };
+      return { mealType, label: meta.label, icon: meta.icon, itemCount: entries.length, totalKcal };
+    });
+
+  // --- Frequent meals ---
+  const frequentFoodIds = frequentRaw.map((f) => f.foodId);
+  const frequentFoods = frequentFoodIds.length > 0
+    ? await prisma.food.findMany({ where: { id: { in: frequentFoodIds } } })
+    : [];
+
+  // Get last logged amount/unit/mealType for each frequent food
+  const frequentMeals: FrequentFood[] = [];
+  for (const fg of frequentRaw) {
+    const food = frequentFoods.find((f) => f.id === fg.foodId);
+    if (!food) continue;
+    const lastEntry = await prisma.logEntry.findFirst({
+      where: { userId: user.id, foodId: fg.foodId },
+      orderBy: { createdAt: "desc" },
+    });
+    if (!lastEntry) continue;
+    frequentMeals.push({
+      foodId: food.id,
+      name: food.name,
+      count: fg._count.foodId,
+      lastAmount: lastEntry.amount,
+      lastUnit: lastEntry.unit,
+      lastMealType: lastEntry.mealType,
+      kcalPer100g: food.kcalPer100g,
+      proteinPer100g: food.proteinPer100g,
+    });
+  }
+
+  // --- Meal scoring: compute running totals ---
+  const targets = profile
+    ? { kcalTarget: profile.kcalTarget, proteinTarget: profile.proteinTarget, carbsTarget: profile.carbsTarget, fatTarget: profile.fatTarget, fiberTarget: profile.fiberTarget ?? 30 }
+    : null;
+
+  // Build a map of "totals before each meal group" for grading
+  const mealGrades = new Map<string, string>();
+  if (targets) {
+    let runningTotals = emptyTotals();
+    for (const m of mealsWithEntries) {
+      const mealNutrients = m.entries.reduce((acc, e) => {
+        const n = safeNutrientsForEntry(e, e.food);
+        return n ? addNutrients(acc, n) : acc;
+      }, emptyTotals());
+      const grade = gradeMeal(mealNutrients, runningTotals, targets);
+      mealGrades.set(m.key, grade);
+      runningTotals = addNutrients(runningTotals, mealNutrients);
+    }
+  }
+
+  // --- Remaining macros for meal suggestions ---
+  const remainingKcal = Math.max(0, (profile?.kcalTarget ?? 2000) - dayTotals.kcal);
+  const remainingProtein = Math.max(0, (profile?.proteinTarget ?? 120) - dayTotals.protein_g);
+  const remainingCarbs = Math.max(0, (profile?.carbsTarget ?? 250) - dayTotals.carbs_g);
+  const remainingFat = Math.max(0, (profile?.fatTarget ?? 70) - dayTotals.fat_g);
 
   return (
     <div className="space-y-4">
@@ -111,7 +202,7 @@ export default async function TodayPage() {
             const val = Number(m.value);
             const tgt = m.target ?? null;
             const pct = tgt ? Math.min(100, Math.round((val / tgt) * 100)) : 0;
-            const diff = tgt !== null ? tgt - val : null; // positive = remaining, negative = over
+            const diff = tgt !== null ? tgt - val : null;
             let barColor: string;
             let statusText: string | null = null;
             let statusColor: string;
@@ -152,6 +243,31 @@ export default async function TodayPage() {
             </span>
           )}
         </div>
+
+        {/* Water tracker */}
+        <div className="mt-4 pt-3 border-t border-gray-100">
+          <WaterTracker glasses={water?.glasses ?? 0} date={today} />
+        </div>
+      </Card>
+
+      {/* Copy yesterday's meals + Quick log frequent meals */}
+      {(copyableMeals.length > 0 || frequentMeals.length > 0) && (
+        <Card>
+          <div className="space-y-4">
+            <CopyYesterdayMeal meals={copyableMeals} fromDate={yesterday} toDate={today} />
+            <FrequentMeals foods={frequentMeals} date={today} />
+          </div>
+        </Card>
+      )}
+
+      {/* What should I eat? */}
+      <Card>
+        <MealSuggestion
+          remainingKcal={remainingKcal}
+          remainingProtein={remainingProtein}
+          remainingCarbs={remainingCarbs}
+          remainingFat={remainingFat}
+        />
       </Card>
 
       {/* Log a meal */}
@@ -163,7 +279,7 @@ export default async function TodayPage() {
         />
       </Card>
 
-      {/* Logged meals */}
+      {/* Logged meals with grades */}
       {mealsWithEntries.length > 0 && (
         <div className="space-y-3">
           {mealsWithEntries.map((m) => {
@@ -173,12 +289,19 @@ export default async function TodayPage() {
               return n ? addNutrients(acc, n) : acc;
             }, emptyTotals());
 
+            const grade = mealGrades.get(m.key);
+
             return (
               <Card key={m.key}>
                 <div className="flex items-center justify-between mb-3">
                   <div className="flex items-center gap-2">
                     <span className="text-lg">{m.icon}</span>
                     <span className="text-sm font-bold text-gray-800">{m.label}</span>
+                    {grade && (
+                      <span className={`rounded-md px-1.5 py-0.5 text-[10px] font-bold ${gradeColor(grade as "A" | "B" | "C" | "D")}`}>
+                        {grade}
+                      </span>
+                    )}
                   </div>
                   <span className="text-sm font-semibold tabular-nums text-brand-600">{round0(mealTotals.kcal)} kcal</span>
                 </div>
