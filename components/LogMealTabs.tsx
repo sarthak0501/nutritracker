@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import { EstimateFromText } from "@/components/EstimateFromText";
-import { LogDayFromText } from "@/components/LogDayFromText";
 import type { EstimateResponse } from "@/lib/llm";
 import type { DayMeal } from "@/lib/day-estimate";
 
@@ -35,57 +34,38 @@ export function LogMealTabs({
   }) => Promise<void>;
   manualAction: (formData: FormData) => Promise<void>;
 }) {
-  const [tab, setTab] = useState<"ai" | "day" | "manual">("ai");
+  const [tab, setTab] = useState<"ai" | "manual">("ai");
 
   return (
     <div>
       <div className="flex rounded-xl bg-gray-100 p-1 mb-4">
         <button
           onClick={() => setTab("ai")}
-          className={`flex-1 rounded-lg py-2 text-xs font-semibold transition-all ${
+          className={`flex-1 rounded-lg py-2 text-sm font-semibold transition-all ${
             tab === "ai"
               ? "bg-white text-gray-900 shadow-sm"
               : "text-gray-400 hover:text-gray-600"
           }`}
         >
-          One Meal
-        </button>
-        <button
-          onClick={() => setTab("day")}
-          className={`flex-1 rounded-lg py-2 text-xs font-semibold transition-all ${
-            tab === "day"
-              ? "bg-white text-gray-900 shadow-sm"
-              : "text-gray-400 hover:text-gray-600"
-          }`}
-        >
-          Full Day
+          AI Estimate
         </button>
         <button
           onClick={() => setTab("manual")}
-          className={`flex-1 rounded-lg py-2 text-xs font-semibold transition-all ${
+          className={`flex-1 rounded-lg py-2 text-sm font-semibold transition-all ${
             tab === "manual"
               ? "bg-white text-gray-900 shadow-sm"
               : "text-gray-400 hover:text-gray-600"
           }`}
         >
-          Manual
+          Manual Entry
         </button>
       </div>
 
       {tab === "ai" && (
         <div>
-          <EstimateFromText date={date} onApply={onApplyEstimate} />
+          <EstimateFromText date={date} onApply={onApplyEstimate} onApplyDay={onApplyDay} />
           <div className="mt-2 text-xs text-gray-400">
-            Describe what you ate and AI estimates the macros.
-          </div>
-        </div>
-      )}
-
-      {tab === "day" && (
-        <div>
-          <LogDayFromText date={date} onApply={onApplyDay} />
-          <div className="mt-2 text-xs text-gray-400">
-            Describe all your meals at once — AI groups them automatically.
+            Describe what you ate and AI estimates the macros. Select "Full Day" to log everything at once.
           </div>
         </div>
       )}
