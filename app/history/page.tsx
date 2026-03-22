@@ -36,6 +36,11 @@ function nextDate(date: string) {
   return d.toISOString().slice(0, 10);
 }
 
+function formatDateLabel(date: string): string {
+  const d = new Date(date + "T00:00:00");
+  return d.toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric" });
+}
+
 const MEAL_LABELS: Record<string, string> = {
   BREAKFAST: "🌅 Breakfast",
   LUNCH: "☀️ Lunch",
@@ -105,87 +110,65 @@ export default async function HistoryPage({
   }
   const previousWorkouts = Array.from(previousMap.values());
 
+  const hasData = entries.length > 0 || workouts.length > 0;
+
   return (
     <div className="space-y-4">
       {/* Date nav */}
       <Card>
         <div className="flex items-center justify-between gap-4">
           <Link href={`/history?date=${prevDate(date)}`}
-            className="rounded-xl bg-gray-100 px-3 py-2 text-sm font-semibold text-gray-600 hover:bg-gray-200 transition-colors">←</Link>
+            className="rounded-xl bg-surface-muted px-3 py-2 text-sm font-semibold text-gray-600 hover:bg-gray-200 transition-colors">
+            ←
+          </Link>
           <div className="text-center">
-            <div className="text-lg font-bold">{date}</div>
-            {isToday && <div className="text-xs text-brand-600 font-medium">Today</div>}
+            <div className="text-lg font-bold">{formatDateLabel(date)}</div>
+            <div className="text-xs text-gray-400 tabular-nums">{date}</div>
+            {isToday && <div className="text-xs text-brand-600 font-medium mt-0.5">Today</div>}
           </div>
           <Link href={isToday ? "/history" : `/history?date=${nextDate(date)}`}
-            className={`rounded-xl bg-gray-100 px-3 py-2 text-sm font-semibold text-gray-600 hover:bg-gray-200 transition-colors ${isToday ? "opacity-30 pointer-events-none" : ""}`}>
+            className={`rounded-xl bg-surface-muted px-3 py-2 text-sm font-semibold text-gray-600 hover:bg-gray-200 transition-colors ${isToday ? "opacity-30 pointer-events-none" : ""}`}>
             →
           </Link>
         </div>
-        {(entries.length > 0 || workouts.length > 0) && (() => {
+
+        {/* Day recap summary */}
+        {hasData && (() => {
           const kcalTgt = profile?.kcalTarget ?? null;
           const kcalDiff = kcalTgt !== null ? kcalTgt - Number(dayTotals.kcal) : null;
-          const proteinTgt = profile?.proteinTarget ?? null;
-          const proteinDiff = proteinTgt !== null ? proteinTgt - Number(dayTotals.protein_g) : null;
-          const carbsTgt = profile?.carbsTarget ?? null;
-          const carbsDiff = carbsTgt !== null ? carbsTgt - Number(dayTotals.carbs_g) : null;
-          const fatTgt = profile?.fatTarget ?? null;
-          const fatDiff = fatTgt !== null ? fatTgt - Number(dayTotals.fat_g) : null;
-          const fiberTgt = profile?.fiberTarget ?? null;
-          const fiberDiff = fiberTgt !== null ? fiberTgt - Number(dayTotals.fiber_g ?? 0) : null;
-          const statsItems = [
-            {
-              label: "Calories",
-              value: round0(dayTotals.kcal),
-              sub: kcalDiff !== null ? (kcalDiff >= 0 ? `${round0(kcalDiff)} left` : `+${round0(-kcalDiff)} over`) : null,
-              color: kcalDiff === null ? "text-gray-900" : kcalDiff >= 0 ? "text-green-600" : "text-red-500",
-              subColor: kcalDiff === null ? "text-gray-400" : kcalDiff >= 0 ? "text-gray-400" : "text-red-400",
-            },
-            {
-              label: "Protein",
-              value: `${round1(dayTotals.protein_g)}g`,
-              sub: proteinDiff !== null ? (proteinDiff <= 0 ? "✓" : `${round1(proteinDiff)}g left`) : null,
-              color: proteinDiff === null ? "text-blue-600" : proteinDiff <= 0 ? "text-green-600" : "text-orange-500",
-              subColor: proteinDiff === null ? "text-gray-400" : proteinDiff <= 0 ? "text-green-500" : "text-orange-400",
-            },
-            {
-              label: "Carbs",
-              value: `${round1(dayTotals.carbs_g)}g`,
-              sub: carbsDiff !== null ? (carbsDiff >= 0 ? `${round1(carbsDiff)}g left` : `+${round1(-carbsDiff)}g over`) : null,
-              color: carbsDiff === null ? "text-amber-600" : carbsDiff >= 0 ? "text-green-600" : "text-red-500",
-              subColor: carbsDiff === null ? "text-gray-400" : carbsDiff >= 0 ? "text-gray-400" : "text-red-400",
-            },
-            {
-              label: "Fat",
-              value: `${round1(dayTotals.fat_g)}g`,
-              sub: fatDiff !== null ? (fatDiff >= 0 ? `${round1(fatDiff)}g left` : `+${round1(-fatDiff)}g over`) : null,
-              color: fatDiff === null ? "text-rose-500" : fatDiff >= 0 ? "text-green-600" : "text-red-500",
-              subColor: fatDiff === null ? "text-gray-400" : fatDiff >= 0 ? "text-gray-400" : "text-red-400",
-            },
-            {
-              label: "Fiber",
-              value: `${round1(dayTotals.fiber_g ?? 0)}g`,
-              sub: fiberDiff !== null ? (fiberDiff <= 0 ? "✓" : `${round1(fiberDiff)}g left`) : null,
-              color: fiberDiff === null ? "text-green-600" : fiberDiff <= 0 ? "text-green-600" : "text-orange-500",
-              subColor: fiberDiff === null ? "text-gray-400" : fiberDiff <= 0 ? "text-green-500" : "text-orange-400",
-            },
-            { label: "Burned", value: round0(totalBurned), sub: null, color: "text-blue-600", subColor: "text-gray-400" },
-          ];
           return (
-            <div className="mt-4 grid grid-cols-3 gap-2 md:grid-cols-6">
-              {statsItems.map(({ label, value, sub, color, subColor }) => (
-                <div key={label} className="text-center rounded-xl bg-gray-50 px-2 py-2.5">
-                  <div className={`text-sm font-bold tabular-nums ${color}`}>{value}</div>
-                  <div className="text-[10px] text-gray-400 mt-0.5">{label}</div>
-                  {sub && <div className={`text-[9px] font-medium tabular-nums mt-0.5 ${subColor}`}>{sub}</div>}
+            <div className="mt-4">
+              <div className="text-[11px] font-bold uppercase tracking-wide text-gray-400 mb-2">Day recap</div>
+              <div className="grid grid-cols-3 gap-2 md:grid-cols-6">
+                {[
+                  { label: "Calories", value: round0(dayTotals.kcal), color: "text-gray-900" },
+                  { label: "Protein", value: `${round1(dayTotals.protein_g)}g`, color: "text-blue-600" },
+                  { label: "Carbs", value: `${round1(dayTotals.carbs_g)}g`, color: "text-amber-600" },
+                  { label: "Fat", value: `${round1(dayTotals.fat_g)}g`, color: "text-rose-500" },
+                  { label: "Fiber", value: `${round1(dayTotals.fiber_g ?? 0)}g`, color: "text-green-600" },
+                  { label: "Burned", value: round0(totalBurned), color: "text-blue-600" },
+                ].map(({ label, value, color }) => (
+                  <div key={label} className="text-center rounded-xl bg-surface-muted px-2 py-2.5">
+                    <div className={`text-sm font-bold tabular-nums ${color}`}>{value}</div>
+                    <div className="text-[10px] text-gray-400 mt-0.5">{label}</div>
+                  </div>
+                ))}
+              </div>
+              {kcalDiff !== null && (
+                <div className="mt-2 text-xs text-center">
+                  {kcalDiff >= 0
+                    ? <span className="text-gray-400 tabular-nums">{round0(kcalDiff)} kcal under target</span>
+                    : <span className="text-red-500 font-medium tabular-nums">{round0(-kcalDiff)} kcal over target</span>
+                  }
                 </div>
-              ))}
+              )}
             </div>
           );
         })()}
       </Card>
 
       {/* Add meal for this date */}
-      <Card title="Log a meal">
+      <Card variant="action" title="Log a meal">
         <LogMealTabs
           date={date}
           onApplyEstimate={applyEstimatedMeal}
@@ -225,7 +208,7 @@ export default async function HistoryPage({
               {mealEntries.map((e) => {
                 const n = safeNutrientsForEntry(e, e.food);
                 return (
-                  <div key={e.id} className="flex items-center justify-between gap-3 rounded-xl bg-gray-50 p-3">
+                  <div key={e.id} className="flex items-center justify-between gap-3 rounded-xl bg-surface-muted p-3">
                     <div className="min-w-0">
                       <div className="truncate text-sm font-semibold text-gray-800">
                         {e.food.name}
@@ -259,7 +242,7 @@ export default async function HistoryPage({
           </div>
           <div className="space-y-2">
             {workouts.map((e) => (
-              <div key={e.id} className="flex items-center justify-between gap-3 rounded-xl bg-gray-50 p-3">
+              <div key={e.id} className="flex items-center justify-between gap-3 rounded-xl bg-surface-muted p-3">
                 <div className="min-w-0">
                   <div className="text-sm font-semibold text-gray-800">{e.exerciseName}</div>
                   <div className="text-xs text-gray-500 mt-0.5">
@@ -282,8 +265,12 @@ export default async function HistoryPage({
         </Card>
       )}
 
-      {entries.length === 0 && workouts.length === 0 && (
-        <div className="text-center py-4 text-sm text-gray-400">No entries yet for this day. Use the forms above to add data.</div>
+      {!hasData && (
+        <div className="text-center py-8">
+          <div className="text-3xl mb-2">📅</div>
+          <div className="text-sm font-medium text-gray-500">Nothing logged for this day</div>
+          <div className="text-xs text-gray-400 mt-1">Use the forms above to add meals or workouts</div>
+        </div>
       )}
     </div>
   );

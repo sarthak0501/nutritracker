@@ -289,18 +289,28 @@ export function EstimateFromText({ date, defaultMealType = "DINNER", forceMode, 
       {/* ========== SINGLE MEAL RESULT ========== */}
       {result && !isFullDay && (
         <div className="space-y-2">
+          <div className="text-xs font-bold uppercase tracking-wide text-gray-400">Here's what I found</div>
           {result.items.map((item, i) => (
             <div key={i} className="rounded-xl bg-surface-muted p-3 text-sm">
-              <div className="font-semibold text-gray-800">{item.description}</div>
-              <div className="text-xs text-gray-500">
-                {item.quantity} {item.unit} \u00B7 confidence {Math.round(item.confidence * 100)}%
+              <div className="flex items-center gap-2">
+                <span className="font-semibold text-gray-800">{item.description}</span>
+                <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-bold ${
+                  item.confidence >= 0.8 ? "bg-green-100 text-green-700" :
+                  item.confidence >= 0.5 ? "bg-amber-100 text-amber-700" :
+                  "bg-red-100 text-red-600"
+                }`}>
+                  {Math.round(item.confidence * 100)}%
+                </span>
+              </div>
+              <div className="text-xs text-gray-500 mt-0.5">
+                {item.quantity} {item.unit}
               </div>
               <div className="mt-1 text-xs tabular-nums text-gray-700">
-                {Math.round(item.nutrients.kcal)} kcal \u00B7 {item.nutrients.protein_g.toFixed(1)}P / {item.nutrients.carbs_g.toFixed(1)}C / {item.nutrients.fat_g.toFixed(1)}F
+                {Math.round(item.nutrients.kcal)} kcal · {item.nutrients.protein_g.toFixed(1)}P / {item.nutrients.carbs_g.toFixed(1)}C / {item.nutrients.fat_g.toFixed(1)}F
               </div>
               {item.assumptions.length > 0 && (
-                <div className="mt-1 text-xs text-gray-400">
-                  Assumed: {item.assumptions.join("; ")}
+                <div className="mt-1.5 rounded-lg bg-white/60 px-2 py-1 text-[11px] text-gray-500">
+                  {item.assumptions.join(" · ")}
                 </div>
               )}
             </div>
@@ -327,8 +337,9 @@ export function EstimateFromText({ date, defaultMealType = "DINNER", forceMode, 
       {/* ========== FULL DAY REVIEW ========== */}
       {hasDayResult && (
         <div className="space-y-4">
+          <div className="text-xs font-bold uppercase tracking-wide text-gray-400">Here's what I understood</div>
           {/* Day summary */}
-          <div className="rounded-xl bg-brand-50 px-4 py-3">
+          <div className="rounded-xl bg-brand-50 border border-brand-100 px-4 py-3">
             <div className="flex items-center justify-between">
               <span className="text-sm font-semibold text-brand-700">
                 {dayMeals.length} meals \u00B7 {totalDayItems} items
@@ -371,15 +382,19 @@ export function EstimateFromText({ date, defaultMealType = "DINNER", forceMode, 
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-1.5">
                           <span className="text-sm font-medium text-gray-800 truncate">{item.description}</span>
-                          {item.confidence < 0.7 && (
-                            <span className="shrink-0 text-[10px] text-orange-500" title="Low confidence estimate">⚠️</span>
-                          )}
+                          <span className={`shrink-0 rounded-full px-1.5 py-0.5 text-[9px] font-bold ${
+                            item.confidence >= 0.8 ? "bg-green-100 text-green-700" :
+                            item.confidence >= 0.5 ? "bg-amber-100 text-amber-700" :
+                            "bg-red-100 text-red-600"
+                          }`}>
+                            {Math.round(item.confidence * 100)}%
+                          </span>
                         </div>
                         <div className="text-xs tabular-nums text-gray-500 mt-0.5">
-                          {Math.round(item.quantity)}g \u00B7 {Math.round(item.nutrients.kcal)} cal \u00B7 {item.nutrients.protein_g.toFixed(1)}P {item.nutrients.carbs_g.toFixed(1)}C {item.nutrients.fat_g.toFixed(1)}F
+                          {Math.round(item.quantity)}g · {Math.round(item.nutrients.kcal)} cal · {item.nutrients.protein_g.toFixed(1)}P {item.nutrients.carbs_g.toFixed(1)}C {item.nutrients.fat_g.toFixed(1)}F
                         </div>
                         {item.assumptions.length > 0 && (
-                          <div className="text-[11px] text-gray-400 mt-0.5 truncate" title={item.assumptions.join("; ")}>
+                          <div className="mt-1 rounded bg-white/60 px-1.5 py-0.5 text-[10px] text-gray-400 truncate" title={item.assumptions.join("; ")}>
                             {item.assumptions[0]}
                           </div>
                         )}

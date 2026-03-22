@@ -26,7 +26,7 @@ function toggle(arr: string[], item: string): string[] {
   return arr.includes(item) ? arr.filter((x) => x !== item) : [...arr, item];
 }
 
-const inputClass = "rounded-xl border-0 bg-gray-100 px-3 py-2.5 placeholder-gray-400 focus:ring-2 focus:ring-brand-500 text-sm w-full";
+const inputClass = "rounded-xl border-0 bg-surface-muted px-3 py-2.5 placeholder-gray-400 focus:ring-2 focus:ring-brand-500 text-sm w-full";
 
 export function OnboardingWizard() {
   const [step, setStep] = useState(1);
@@ -38,6 +38,7 @@ export function OnboardingWizard() {
   const [allergies, setAllergies] = useState<string[]>([]);
   const [restrictions, setRestrictions] = useState<string[]>([]);
   const [conditions, setConditions] = useState<string[]>([]);
+  const [showSuccess, setShowSuccess] = useState(false);
   const [isPending, startTransition] = useTransition();
   const router = useRouter();
 
@@ -56,9 +57,22 @@ export function OnboardingWizard() {
         dietaryRestrictions: restrictions,
         healthConditions: conditions,
       });
-      router.push("/");
-      router.refresh();
+      setShowSuccess(true);
+      setTimeout(() => {
+        router.push("/");
+        router.refresh();
+      }, 1500);
     });
+  }
+
+  if (showSuccess) {
+    return (
+      <div className="text-center py-8 space-y-3">
+        <div className="text-4xl">🎉</div>
+        <div className="text-lg font-bold text-gray-900">You're all set!</div>
+        <div className="text-sm text-gray-500">Taking you to your dashboard...</div>
+      </div>
+    );
   }
 
   return (
@@ -75,7 +89,7 @@ export function OnboardingWizard() {
         <div className="space-y-4">
           <div>
             <h2 className="text-lg font-bold text-gray-900">What's your goal?</h2>
-            <p className="text-sm text-gray-500 mt-1">We'll set your daily targets based on this.</p>
+            <p className="text-sm text-gray-500 mt-1">This sets your daily calorie and macro targets. You can adjust them later.</p>
           </div>
           <div className="grid gap-2">
             {GOALS.map((g) => (
@@ -83,7 +97,7 @@ export function OnboardingWizard() {
                 key={g.value}
                 type="button"
                 onClick={() => setGoal(g.value)}
-                className={`flex items-center gap-3 rounded-xl p-3.5 text-left transition-all border-2 ${goal === g.value ? "border-brand-500 bg-brand-50" : "border-transparent bg-gray-50 hover:bg-gray-100"}`}
+                className={`flex items-center gap-3 rounded-xl p-3.5 text-left transition-all border-2 ${goal === g.value ? "border-brand-500 bg-brand-50" : "border-transparent bg-surface-muted hover:bg-gray-100"}`}
               >
                 <span className="text-2xl">{g.emoji}</span>
                 <div>
@@ -93,14 +107,17 @@ export function OnboardingWizard() {
               </button>
             ))}
           </div>
-          <div className="rounded-xl bg-gray-50 p-3 grid grid-cols-4 gap-2 text-center">
-            <div><div className="text-sm font-bold text-gray-800">{targets.kcalTarget}</div><div className="text-[10px] text-gray-400">kcal</div></div>
-            <div><div className="text-sm font-bold text-gray-800">{targets.proteinTarget}g</div><div className="text-[10px] text-gray-400">protein</div></div>
-            <div><div className="text-sm font-bold text-gray-800">{targets.carbsTarget}g</div><div className="text-[10px] text-gray-400">carbs</div></div>
-            <div><div className="text-sm font-bold text-gray-800">{targets.fatTarget}g</div><div className="text-[10px] text-gray-400">fat</div></div>
+          <div className="rounded-xl bg-brand-50 border border-brand-100 p-3">
+            <div className="text-[10px] font-medium text-brand-600 uppercase tracking-wide mb-1.5">Your daily targets</div>
+            <div className="grid grid-cols-4 gap-2 text-center">
+              <div><div className="text-sm font-bold text-gray-800">{targets.kcalTarget}</div><div className="text-[10px] text-gray-400">kcal</div></div>
+              <div><div className="text-sm font-bold text-gray-800">{targets.proteinTarget}g</div><div className="text-[10px] text-gray-400">protein</div></div>
+              <div><div className="text-sm font-bold text-gray-800">{targets.carbsTarget}g</div><div className="text-[10px] text-gray-400">carbs</div></div>
+              <div><div className="text-sm font-bold text-gray-800">{targets.fatTarget}g</div><div className="text-[10px] text-gray-400">fat</div></div>
+            </div>
           </div>
           <button onClick={() => setStep(2)} className="w-full rounded-xl bg-brand-600 px-4 py-3 text-sm font-bold text-white hover:bg-brand-700 transition-all active:scale-[0.98]">
-            Continue →
+            Continue
           </button>
         </div>
       )}
@@ -109,8 +126,8 @@ export function OnboardingWizard() {
       {step === 2 && (
         <div className="space-y-4">
           <div>
-            <h2 className="text-lg font-bold text-gray-900">Your body stats</h2>
-            <p className="text-sm text-gray-500 mt-1">Optional — helps personalize recommendations.</p>
+            <h2 className="text-lg font-bold text-gray-900">About you</h2>
+            <p className="text-sm text-gray-500 mt-1">Helps us give more accurate calorie estimates and workout recommendations. Totally optional.</p>
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
@@ -137,10 +154,10 @@ export function OnboardingWizard() {
           </div>
           <div className="flex gap-3">
             <button onClick={() => setStep(1)} className="flex-1 rounded-xl bg-gray-100 px-4 py-3 text-sm font-bold text-gray-600 hover:bg-gray-200 transition-all">
-              ← Back
+              Back
             </button>
             <button onClick={() => setStep(3)} className="flex-1 rounded-xl bg-brand-600 px-4 py-3 text-sm font-bold text-white hover:bg-brand-700 transition-all active:scale-[0.98]">
-              Continue →
+              Continue
             </button>
           </div>
         </div>
@@ -150,8 +167,8 @@ export function OnboardingWizard() {
       {step === 3 && (
         <div className="space-y-5">
           <div>
-            <h2 className="text-lg font-bold text-gray-900">Any restrictions or conditions?</h2>
-            <p className="text-sm text-gray-500 mt-1">Used to filter meal suggestions. Skip anything that doesn't apply.</p>
+            <h2 className="text-lg font-bold text-gray-900">Dietary preferences</h2>
+            <p className="text-sm text-gray-500 mt-1">We use this to personalise meal suggestions. Tap any that apply, or skip to finish.</p>
           </div>
 
           <div>
@@ -159,8 +176,8 @@ export function OnboardingWizard() {
             <div className="flex flex-wrap gap-2">
               {COMMON_ALLERGIES.map((a) => (
                 <button key={a} type="button" onClick={() => setAllergies(toggle(allergies, a))}
-                  className={`rounded-full px-3 py-1 text-xs font-medium transition-all ${allergies.includes(a) ? "bg-red-100 text-red-700" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}>
-                  {a}
+                  className={`rounded-full px-3 py-1.5 text-xs font-medium transition-all ${allergies.includes(a) ? "bg-red-100 text-red-700 ring-1 ring-red-200" : "bg-surface-muted text-gray-600 hover:bg-gray-200"}`}>
+                  {allergies.includes(a) && <span className="mr-1">✕</span>}{a}
                 </button>
               ))}
             </div>
@@ -171,8 +188,8 @@ export function OnboardingWizard() {
             <div className="flex flex-wrap gap-2">
               {COMMON_RESTRICTIONS.map((r) => (
                 <button key={r} type="button" onClick={() => setRestrictions(toggle(restrictions, r))}
-                  className={`rounded-full px-3 py-1 text-xs font-medium transition-all ${restrictions.includes(r) ? "bg-brand-100 text-brand-700" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}>
-                  {r}
+                  className={`rounded-full px-3 py-1.5 text-xs font-medium transition-all ${restrictions.includes(r) ? "bg-brand-100 text-brand-700 ring-1 ring-brand-200" : "bg-surface-muted text-gray-600 hover:bg-gray-200"}`}>
+                  {restrictions.includes(r) && <span className="mr-1">✓</span>}{r}
                 </button>
               ))}
             </div>
@@ -183,20 +200,26 @@ export function OnboardingWizard() {
             <div className="flex flex-wrap gap-2">
               {COMMON_CONDITIONS.map((c) => (
                 <button key={c} type="button" onClick={() => setConditions(toggle(conditions, c))}
-                  className={`rounded-full px-3 py-1 text-xs font-medium transition-all ${conditions.includes(c) ? "bg-orange-100 text-orange-700" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}>
-                  {c}
+                  className={`rounded-full px-3 py-1.5 text-xs font-medium transition-all ${conditions.includes(c) ? "bg-orange-100 text-orange-700 ring-1 ring-orange-200" : "bg-surface-muted text-gray-600 hover:bg-gray-200"}`}>
+                  {conditions.includes(c) && <span className="mr-1">✓</span>}{c}
                 </button>
               ))}
             </div>
           </div>
 
+          <div className="rounded-xl bg-purple-50 border border-purple-100 p-3">
+            <div className="text-xs text-purple-700">
+              <span className="font-semibold">Tip:</span> After setup, add an accountability buddy from the Buddy tab to stay motivated together.
+            </div>
+          </div>
+
           <div className="flex gap-3">
             <button onClick={() => setStep(2)} className="flex-1 rounded-xl bg-gray-100 px-4 py-3 text-sm font-bold text-gray-600 hover:bg-gray-200 transition-all">
-              ← Back
+              Back
             </button>
             <button onClick={handleComplete} disabled={isPending}
               className="flex-1 rounded-xl bg-brand-600 px-4 py-3 text-sm font-bold text-white hover:bg-brand-700 disabled:opacity-60 transition-all active:scale-[0.98]">
-              {isPending ? "Setting up…" : "Let's go! →"}
+              {isPending ? "Setting up..." : "Start tracking"}
             </button>
           </div>
         </div>

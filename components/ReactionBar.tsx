@@ -6,11 +6,11 @@ import { toggleReaction } from "@/app/actions/reactions";
 
 type ReactionType = "THUMBS_UP" | "THUMBS_DOWN" | "FIRE" | "MUSCLE";
 
-const REACTIONS: { type: ReactionType; emoji: string; label: string }[] = [
-  { type: "THUMBS_UP", emoji: "👍", label: "Nice!" },
-  { type: "THUMBS_DOWN", emoji: "👎", label: "Hmm" },
-  { type: "FIRE", emoji: "🔥", label: "On fire!" },
-  { type: "MUSCLE", emoji: "💪", label: "Strong!" },
+const REACTIONS: { type: ReactionType; emoji: string; label: string; activeColor: string }[] = [
+  { type: "THUMBS_UP", emoji: "👍", label: "Nice!", activeColor: "bg-green-100 text-green-700 ring-1 ring-green-200" },
+  { type: "THUMBS_DOWN", emoji: "👎", label: "Hmm", activeColor: "bg-red-50 text-red-600 ring-1 ring-red-200" },
+  { type: "FIRE", emoji: "🔥", label: "On fire!", activeColor: "bg-orange-100 text-orange-700 ring-1 ring-orange-200" },
+  { type: "MUSCLE", emoji: "💪", label: "Strong!", activeColor: "bg-purple-100 text-purple-700 ring-1 ring-purple-200" },
 ];
 
 type Reaction = {
@@ -67,7 +67,7 @@ export function ReactionBar({
 
   return (
     <div className="flex items-center gap-1.5 flex-wrap mt-2">
-      {REACTIONS.map(({ type, emoji }) => {
+      {REACTIONS.map(({ type, emoji, activeColor }) => {
         const count = countFor(type);
         const active = hasReacted(type);
         return (
@@ -75,13 +75,13 @@ export function ReactionBar({
             key={type}
             onClick={() => handleToggle(type)}
             title={REACTIONS.find(r => r.type === type)?.label}
-            className={`flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium transition-all ${
+            className={`flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium transition-all active:scale-95 ${
               active
-                ? "bg-brand-100 text-brand-700 scale-110 shadow-sm"
-                : "bg-gray-100 text-gray-400 hover:bg-gray-200 hover:text-gray-600"
+                ? `${activeColor} scale-105 shadow-sm`
+                : "bg-white/80 text-gray-400 hover:bg-gray-100 hover:text-gray-600 shadow-sm"
             }`}
           >
-            <span>{emoji}</span>
+            <span className={active ? "text-sm" : ""}>{emoji}</span>
             {count > 0 && <span className="tabular-nums font-bold">{count}</span>}
           </button>
         );

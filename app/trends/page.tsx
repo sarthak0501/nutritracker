@@ -157,36 +157,63 @@ export default async function TrendsPage({
     goals.push({ label: "Fat", current: Math.round((totalsByDate.get(days[days.length - 1]) ?? empty()).fat_g), target: profile.fatTarget, unit: "g" });
   }
 
+  // Insight text
+  const proteinGoalMet = daysWithFood > 0 && profile ? avgNutrition.protein >= profile.proteinTarget * 0.9 : false;
+  const consistentTraining = avgWorkout.activeDays >= (range === 7 ? 3 : 12);
+
   return (
     <div className="space-y-4">
       {/* Header + range toggle */}
       <Card>
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <div className="text-lg font-semibold">Trends</div>
+            <div className="text-lg font-bold">Your progress</div>
             <div className="mt-1 text-sm text-gray-500">
-              {range}-day overview of nutrition and training.
+              {range}-day overview of nutrition and training
             </div>
           </div>
-          <div className="flex gap-2">
+          <div className="flex rounded-xl bg-surface-muted p-1">
             <Link
               href="/trends?range=7"
-              className={`rounded-xl px-3 py-1.5 text-sm ${
-                range === 7 ? "bg-brand-600 text-white border-brand-600" : "border-gray-100 hover:bg-gray-50"
+              className={`rounded-lg px-3 py-1.5 text-sm font-semibold transition-all ${
+                range === 7 ? "bg-gray-900 text-white shadow-sm" : "text-gray-400 hover:text-gray-700"
               }`}
             >
               7d
             </Link>
             <Link
               href="/trends?range=30"
-              className={`rounded-xl px-3 py-1.5 text-sm ${
-                range === 30 ? "bg-brand-600 text-white border-brand-600" : "border-gray-100 hover:bg-gray-50"
+              className={`rounded-lg px-3 py-1.5 text-sm font-semibold transition-all ${
+                range === 30 ? "bg-gray-900 text-white shadow-sm" : "text-gray-400 hover:text-gray-700"
               }`}
             >
               30d
             </Link>
           </div>
         </div>
+
+        {/* Quick insights */}
+        {hasGoals && (
+          <div className="mt-3 flex flex-wrap gap-2">
+            {proteinGoalMet && (
+              <span className="inline-flex items-center gap-1 rounded-full bg-green-50 px-2.5 py-1 text-xs font-medium text-green-700">
+                ✓ Hitting protein goals
+              </span>
+            )}
+            {consistentTraining && (
+              <span className="inline-flex items-center gap-1 rounded-full bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-700">
+                ✓ Consistent training
+              </span>
+            )}
+            {weightChange !== null && (
+              <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium ${
+                weightChange < 0 ? "bg-green-50 text-green-700" : weightChange > 0 ? "bg-amber-50 text-amber-700" : "bg-gray-50 text-gray-600"
+              }`}>
+                {weightChange > 0 ? "+" : ""}{weightChange}kg this period
+              </span>
+            )}
+          </div>
+        )}
       </Card>
 
       {/* Today's goal progress */}
@@ -237,15 +264,15 @@ export default async function TrendsPage({
       {/* Nutrition trends */}
       <Card title="Nutrition">
         <div className="grid gap-2 md:grid-cols-3 mb-4">
-          <div className="rounded-xl bg-gray-50 p-3">
+          <div className="rounded-xl bg-surface-muted p-3">
             <div className="text-xs text-gray-500">Avg calories</div>
             <div className="mt-1 text-lg font-semibold tabular-nums">{avgNutrition.kcal} kcal</div>
           </div>
-          <div className="rounded-xl bg-gray-50 p-3">
+          <div className="rounded-xl bg-surface-muted p-3">
             <div className="text-xs text-gray-500">Avg protein</div>
             <div className="mt-1 text-lg font-semibold tabular-nums">{avgNutrition.protein} g</div>
           </div>
-          <div className="rounded-xl bg-gray-50 p-3">
+          <div className="rounded-xl bg-surface-muted p-3">
             <div className="text-xs text-gray-500">Avg fiber</div>
             <div className="mt-1 text-lg font-semibold tabular-nums">{avgNutrition.fiber} g</div>
           </div>
@@ -256,15 +283,15 @@ export default async function TrendsPage({
       {/* Workout trends */}
       <Card title="Training">
         <div className="grid gap-2 md:grid-cols-3 mb-4">
-          <div className="rounded-xl bg-gray-50 p-3">
+          <div className="rounded-xl bg-surface-muted p-3">
             <div className="text-xs text-gray-500">Avg cal burned</div>
             <div className="mt-1 text-lg font-semibold tabular-nums">{avgWorkout.burned} kcal</div>
           </div>
-          <div className="rounded-xl bg-gray-50 p-3">
+          <div className="rounded-xl bg-surface-muted p-3">
             <div className="text-xs text-gray-500">Avg volume</div>
             <div className="mt-1 text-lg font-semibold tabular-nums">{avgWorkout.volume} kg</div>
           </div>
-          <div className="rounded-xl bg-gray-50 p-3">
+          <div className="rounded-xl bg-surface-muted p-3">
             <div className="text-xs text-gray-500">Active days</div>
             <div className="mt-1 text-lg font-semibold tabular-nums">{avgWorkout.activeDays} / {range}</div>
           </div>
@@ -276,14 +303,14 @@ export default async function TrendsPage({
       {weightData.length > 0 && (
         <Card title="Body Weight">
           <div className="grid gap-2 md:grid-cols-3 mb-4">
-            <div className="rounded-xl bg-gray-50 p-3">
+            <div className="rounded-xl bg-surface-muted p-3">
               <div className="text-xs text-gray-500">Current</div>
               <div className="mt-1 text-lg font-semibold tabular-nums">
                 {weightData[weightData.length - 1].weightKg} kg
               </div>
             </div>
             {weightData.length >= 2 && (
-              <div className="rounded-xl bg-gray-50 p-3">
+              <div className="rounded-xl bg-surface-muted p-3">
                 <div className="text-xs text-gray-500">First recorded</div>
                 <div className="mt-1 text-lg font-semibold tabular-nums">
                   {weightData[0].weightKg} kg
@@ -291,7 +318,7 @@ export default async function TrendsPage({
               </div>
             )}
             {weightChange !== null && (
-              <div className="rounded-xl bg-gray-50 p-3">
+              <div className="rounded-xl bg-surface-muted p-3">
                 <div className="text-xs text-gray-500">Change</div>
                 <div className={`mt-1 text-lg font-semibold tabular-nums ${
                   weightChange < 0 ? "text-green-600" : weightChange > 0 ? "text-amber-600" : "text-gray-600"
@@ -307,7 +334,7 @@ export default async function TrendsPage({
 
       {/* AI Weekly Summary (7d view) */}
       {range === 7 && hasGoals && (
-        <Card title="AI Weekly Summary">
+        <Card title="Your week in review">
           <WeeklySummary
             days={days.map((d) => {
               const t = totalsByDate.get(d) ?? empty();
@@ -366,10 +393,10 @@ export default async function TrendsPage({
               const weekLabel = `${weekDays[0]?.slice(5)} – ${weekDays[weekDays.length - 1]?.slice(5)}`;
 
               return (
-                <div key={weekIdx} className="rounded-xl bg-gray-50 p-3">
-                  <div className="text-xs text-gray-500 mb-1">{weekLabel}</div>
-                  <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm tabular-nums">
-                    <span>{Math.round(weekNutrition.kcal / weekDays.length)} kcal/day avg</span>
+                <div key={weekIdx} className="rounded-xl bg-surface-muted p-3">
+                  <div className="text-xs font-medium text-gray-500 mb-1.5">{weekLabel}</div>
+                  <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm tabular-nums sm:grid-cols-3">
+                    <span>{Math.round(weekNutrition.kcal / weekDays.length)} kcal/day</span>
                     <span>{toFixed1(weekNutrition.protein / weekDays.length)}g protein/day</span>
                     <span>{Math.round(weekWorkout.burned)} kcal burned</span>
                     <span>{Math.round(weekWorkout.volume)}kg volume</span>

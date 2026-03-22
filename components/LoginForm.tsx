@@ -41,7 +41,7 @@ export function LoginForm() {
           disabled={isPending}
           className="w-full rounded-xl bg-brand-600 px-4 py-3 text-sm font-bold text-white hover:bg-brand-700 active:scale-[0.98] disabled:opacity-50 transition-all"
         >
-          {isPending ? "Signing in..." : "Sign in"}
+          {isPending ? "Setting things up..." : "Get started"}
         </button>
       </div>
     </form>

@@ -44,7 +44,7 @@ export default async function TodayPage() {
   return (
     <div className="space-y-4">
       {/* 1. PRIMARY: AI Composer — the hero */}
-      <div className="rounded-2xl bg-gradient-to-br from-brand-50 via-white to-accent-50 p-5 shadow-card border border-brand-100">
+      <Card variant="action">
         <div className="mb-1 text-lg font-bold text-gray-900">What did you eat today?</div>
         <div className="mb-4 text-xs text-gray-400">Describe a meal or your whole day — I'll estimate and organize it.</div>
         <LogMealTabs
@@ -53,7 +53,7 @@ export default async function TodayPage() {
           onApplyDay={applyEstimatedDay}
           manualAction={createManualFoodAndLogEntry}
         />
-      </div>
+      </Card>
 
       {/* 2. SECONDARY: Day summary */}
       <Card>
@@ -147,9 +147,10 @@ export default async function TodayPage() {
         />
       </Card>
 
-      {/* 3. TERTIARY: Quick actions — copy yesterday + frequent meals */}
+      {/* 3. TERTIARY: Shortcuts — copy yesterday + frequent meals */}
       {(copyableMeals.length > 0 || frequentMeals.length > 0) && (
         <div className="rounded-2xl bg-surface-muted p-4 space-y-4">
+          <div className="text-[11px] font-bold uppercase tracking-wide text-gray-400">Shortcuts</div>
           <CopyYesterdayMeal meals={copyableMeals} fromDate={yesterday} toDate={today} />
           <FrequentMeals foods={frequentMeals} date={today} />
         </div>
@@ -208,7 +209,7 @@ export default async function TodayPage() {
                           <div className="mt-2 flex items-center gap-1 flex-wrap">
                             {reactions.map((r) => (
                               <span key={r.id} className="inline-flex items-center gap-1 rounded-full bg-white px-2 py-0.5 text-xs text-gray-600 shadow-sm">
-                                {r.type === "THUMBS_UP" ? "\uD83D\uDC4D" : r.type === "THUMBS_DOWN" ? "\uD83D\uDC4E" : r.type === "FIRE" ? "\uD83D\uDD25" : "\uD83D\uDCAA"}
+                                {r.type === "THUMBS_UP" ? "👍" : r.type === "THUMBS_DOWN" ? "👎" : r.type === "FIRE" ? "🔥" : "💪"}
                                 <span className="text-gray-400">{r.user.username}</span>
                               </span>
                             ))}
@@ -226,13 +227,13 @@ export default async function TodayPage() {
 
       {entries.length === 0 && (
         <div className="text-center py-8">
-          <div className="text-2xl mb-2">🍽️</div>
+          <div className="text-3xl mb-2">🍽️</div>
           <div className="text-sm font-medium text-gray-500">No meals logged yet today</div>
           <div className="text-xs text-gray-400 mt-1">Use the composer above to get started</div>
         </div>
       )}
 
-      {/* Buddy feed — social card */}
+      {/* Buddy feed — social section */}
       <BuddyTodayFeed currentUserId={user.id} date={today} />
     </div>
   );

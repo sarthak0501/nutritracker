@@ -55,26 +55,26 @@ export function LogWorkoutTabs({
   return (
     <div>
       {/* Main section tabs */}
-      <div className="flex rounded-xl bg-gray-100 p-1 mb-4">
+      <div className="flex gap-2 mb-4">
         <button
           onClick={() => setTab("log")}
-          className={`flex-1 rounded-lg py-2 text-sm font-semibold transition-all ${
+          className={`flex-1 rounded-xl py-2.5 text-sm font-bold transition-all ${
             tab === "log"
-              ? "bg-white text-gray-900 shadow-sm"
-              : "text-gray-400 hover:text-gray-600"
+              ? "bg-brand-600 text-white shadow-sm"
+              : "bg-surface-muted text-gray-500 hover:text-gray-700 hover:bg-gray-200"
           }`}
         >
-          Log Workout
+          Describe workout
         </button>
         <button
           onClick={() => setTab("recommend")}
-          className={`flex-1 rounded-lg py-2 text-sm font-semibold transition-all ${
+          className={`flex-1 rounded-xl py-2.5 text-sm font-bold transition-all ${
             tab === "recommend"
-              ? "bg-white text-gray-900 shadow-sm"
-              : "text-gray-400 hover:text-gray-600"
+              ? "bg-brand-600 text-white shadow-sm"
+              : "bg-surface-muted text-gray-500 hover:text-gray-700 hover:bg-gray-200"
           }`}
         >
-          Get Recommendations
+          Coach me
         </button>
       </div>
 
@@ -108,7 +108,7 @@ export function LogWorkoutTabs({
             <div>
               <EstimateWorkout date={date} weightKg={weightKg} onApply={onApplyEstimate} />
               <div className="mt-2 text-xs text-gray-400">
-                Describe your workout and AI estimates calories burned.
+                Tell me what you did — I'll estimate calories burned.
               </div>
             </div>
           )}
@@ -119,36 +119,35 @@ export function LogWorkoutTabs({
               <div className="grid gap-2 grid-cols-2">
                 <label className="grid gap-1 text-sm">
                   <div className="text-xs font-medium text-gray-500">Exercise name</div>
-                  <input name="exerciseName" required placeholder="Bench press" className="rounded-xl border-0 bg-gray-100 px-3 py-2.5 text-sm placeholder-gray-400 focus:ring-2 focus:ring-brand-500" />
+                  <input name="exerciseName" required placeholder="Bench press" className="rounded-xl border-0 bg-surface-muted px-3 py-2.5 text-sm placeholder-gray-400 focus:ring-2 focus:ring-brand-500" />
                 </label>
                 <label className="grid gap-1 text-sm">
                   <div className="text-xs font-medium text-gray-500">Muscle group</div>
-                  <select name="muscleGroup" className="rounded-xl border-0 bg-gray-100 px-3 py-2.5 text-sm text-gray-900 focus:ring-2 focus:ring-brand-500">
+                  <select name="muscleGroup" className="rounded-xl border-0 bg-surface-muted px-3 py-2.5 text-sm text-gray-900 focus:ring-2 focus:ring-brand-500">
                     <option value="">—</option>
                     {MUSCLE_GROUPS.map((g) => <option key={g} value={g.toLowerCase()}>{g}</option>)}
                   </select>
                 </label>
               </div>
-              <div className="grid gap-2 grid-cols-5">
+              <div className="grid gap-2 grid-cols-2 sm:grid-cols-4">
                 <label className="grid gap-1 text-sm">
-                  <div className="text-xs font-medium text-gray-500">Duration</div>
-                  <input name="durationMinutes" type="number" step="1" placeholder="min" className="rounded-xl border-0 bg-gray-100 px-3 py-2.5 text-sm placeholder-gray-400 focus:ring-2 focus:ring-brand-500" />
+                  <div className="text-xs font-medium text-gray-500">Duration (min)</div>
+                  <input name="durationMinutes" type="number" step="1" placeholder="30" className="rounded-xl border-0 bg-surface-muted px-3 py-2.5 text-sm placeholder-gray-400 focus:ring-2 focus:ring-brand-500" />
                 </label>
                 <label className="grid gap-1 text-sm">
-                  <div className="text-xs font-medium text-gray-500">Sets</div>
-                  <input name="sets" type="number" step="1" className="rounded-xl border-0 bg-gray-100 px-3 py-2.5 text-sm focus:ring-2 focus:ring-brand-500" />
+                  <div className="text-xs font-medium text-gray-500">Sets × Reps</div>
+                  <div className="flex gap-1">
+                    <input name="sets" type="number" step="1" placeholder="3" className="rounded-xl border-0 bg-surface-muted px-2 py-2.5 text-sm placeholder-gray-400 focus:ring-2 focus:ring-brand-500 w-full" />
+                    <input name="reps" type="number" step="1" placeholder="10" className="rounded-xl border-0 bg-surface-muted px-2 py-2.5 text-sm placeholder-gray-400 focus:ring-2 focus:ring-brand-500 w-full" />
+                  </div>
                 </label>
                 <label className="grid gap-1 text-sm">
-                  <div className="text-xs font-medium text-gray-500">Reps</div>
-                  <input name="reps" type="number" step="1" className="rounded-xl border-0 bg-gray-100 px-3 py-2.5 text-sm focus:ring-2 focus:ring-brand-500" />
+                  <div className="text-xs font-medium text-gray-500">Weight (kg)</div>
+                  <input name="weightKg" type="number" step="0.5" placeholder="60" className="rounded-xl border-0 bg-surface-muted px-3 py-2.5 text-sm placeholder-gray-400 focus:ring-2 focus:ring-brand-500" />
                 </label>
                 <label className="grid gap-1 text-sm">
-                  <div className="text-xs font-medium text-gray-500">Weight</div>
-                  <input name="weightKg" type="number" step="0.5" placeholder="kg" className="rounded-xl border-0 bg-gray-100 px-3 py-2.5 text-sm placeholder-gray-400 focus:ring-2 focus:ring-brand-500" />
-                </label>
-                <label className="grid gap-1 text-sm">
-                  <div className="text-xs font-medium text-gray-500">Cal</div>
-                  <input name="caloriesBurned" type="number" step="1" required className="rounded-xl border-0 bg-gray-100 px-3 py-2.5 text-sm focus:ring-2 focus:ring-brand-500" />
+                  <div className="text-xs font-medium text-gray-500">Calories</div>
+                  <input name="caloriesBurned" type="number" step="1" required placeholder="150" className="rounded-xl border-0 bg-surface-muted px-3 py-2.5 text-sm placeholder-gray-400 focus:ring-2 focus:ring-brand-500" />
                 </label>
               </div>
               <button className="w-full rounded-xl bg-brand-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-brand-700 active:scale-[0.98] transition-all">

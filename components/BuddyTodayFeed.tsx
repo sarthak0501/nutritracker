@@ -35,7 +35,7 @@ export async function BuddyTodayFeed({
 
   if (!buddyId) {
     return (
-      <div className="rounded-2xl bg-gradient-to-br from-purple-50 via-white to-pink-50 p-5 shadow-card border border-purple-100">
+      <Card variant="social">
         <div className="text-center py-4">
           <div className="text-2xl mb-2">👥</div>
           <div className="text-sm font-bold text-gray-700">Find an accountability buddy</div>
@@ -44,7 +44,7 @@ export async function BuddyTodayFeed({
             Add a buddy
           </a>
         </div>
-      </div>
+      </Card>
     );
   }
 
@@ -70,18 +70,23 @@ export async function BuddyTodayFeed({
   return (
     <div className="space-y-3">
       {/* Social header with avatar */}
-      <div className="rounded-2xl bg-gradient-to-br from-purple-50 via-white to-pink-50 p-4 shadow-card border border-purple-100">
+      <Card variant="social">
         <div className="flex items-center gap-3">
           <AvatarBadge name={buddyName} />
-          <div>
-            <div className="text-sm font-bold text-gray-800">{buddyName}'s Day</div>
-            <div className="text-xs text-gray-400">Your accountability buddy</div>
+          <div className="flex-1">
+            <div className="text-sm font-bold text-gray-800">Check in on {buddyName}</div>
+            <div className="text-xs text-gray-400">
+              {entries.length > 0
+                ? `Logged ${entries.length} item${entries.length !== 1 ? "s" : ""} today`
+                : "Hasn't checked in yet today"
+              }
+            </div>
           </div>
         </div>
 
         {entries.length === 0 ? (
-          <div className="mt-3 text-center py-3">
-            <div className="text-xs text-gray-400">Your buddy hasn't logged anything yet today. Send them some encouragement!</div>
+          <div className="mt-3 text-center py-2">
+            <div className="text-xs text-gray-400">Send them some encouragement when they log!</div>
           </div>
         ) : (
           <div className="mt-3 grid grid-cols-3 gap-2 sm:grid-cols-5">
@@ -99,7 +104,7 @@ export async function BuddyTodayFeed({
             ))}
           </div>
         )}
-      </div>
+      </Card>
 
       {entries.length > 0 && Array.from(byMeal.entries()).map(([mealKey, mealEntries]) => {
         const mealTotals = mealEntries.reduce((acc, e) => {
