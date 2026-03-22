@@ -34,79 +34,99 @@ export function LogMealTabs({
   }) => Promise<void>;
   manualAction: (formData: FormData) => Promise<void>;
 }) {
-  const [tab, setTab] = useState<"ai" | "manual">("ai");
+  const [mode, setMode] = useState<"quick" | "fullday" | "manual">("quick");
 
   return (
     <div>
-      <div className="flex rounded-xl bg-gray-100 p-1 mb-4">
+      {/* Mode selector — two prominent pills + manual fallback */}
+      <div className="flex gap-2 mb-4">
         <button
-          onClick={() => setTab("ai")}
-          className={`flex-1 rounded-lg py-2 text-sm font-semibold transition-all ${
-            tab === "ai"
-              ? "bg-white text-gray-900 shadow-sm"
-              : "text-gray-400 hover:text-gray-600"
+          onClick={() => setMode("quick")}
+          className={`flex-1 rounded-xl py-2.5 text-sm font-bold transition-all ${
+            mode === "quick"
+              ? "bg-brand-600 text-white shadow-sm"
+              : "bg-surface-muted text-gray-500 hover:text-gray-700 hover:bg-gray-200"
           }`}
         >
-          AI Estimate
+          Quick meal
         </button>
         <button
-          onClick={() => setTab("manual")}
-          className={`flex-1 rounded-lg py-2 text-sm font-semibold transition-all ${
-            tab === "manual"
-              ? "bg-white text-gray-900 shadow-sm"
-              : "text-gray-400 hover:text-gray-600"
+          onClick={() => setMode("fullday")}
+          className={`flex-1 rounded-xl py-2.5 text-sm font-bold transition-all ${
+            mode === "fullday"
+              ? "bg-brand-600 text-white shadow-sm"
+              : "bg-surface-muted text-gray-500 hover:text-gray-700 hover:bg-gray-200"
           }`}
         >
-          Manual Entry
+          Full day
+        </button>
+        <button
+          onClick={() => setMode("manual")}
+          className={`rounded-xl px-3 py-2.5 text-sm font-medium transition-all ${
+            mode === "manual"
+              ? "bg-gray-800 text-white"
+              : "bg-surface-muted text-gray-400 hover:text-gray-600"
+          }`}
+        >
+          Manual
         </button>
       </div>
 
-      {tab === "ai" && (
+      {mode === "quick" && (
         <div>
-          <EstimateFromText date={date} onApply={onApplyEstimate} onApplyDay={onApplyDay} />
+          <EstimateFromText date={date} onApply={onApplyEstimate} onApplyDay={onApplyDay} forceMode="single" />
           <div className="mt-2 text-xs text-gray-400">
-            Describe what you ate and AI estimates the macros. Select "Full Day" to log everything at once.
+            Describe a meal and I'll estimate the macros for you.
           </div>
         </div>
       )}
 
-      {tab === "manual" && (
+      {mode === "fullday" && (
+        <div>
+          <EstimateFromText date={date} onApply={onApplyEstimate} onApplyDay={onApplyDay} forceMode="fullday" />
+          <div className="mt-2 text-xs text-gray-400">
+            Type breakfast, lunch, dinner, and snacks in one message. I'll organize and estimate everything.
+          </div>
+        </div>
+      )}
+
+      {mode === "manual" && (
         <form action={manualAction} className="grid gap-3">
           <input type="hidden" name="date" value={date} />
           <div className="grid gap-2 grid-cols-2">
             <label className="grid gap-1 text-sm">
               <div className="text-xs font-medium text-gray-500">Meal</div>
-              <select name="mealType" className="rounded-xl border-0 bg-gray-100 px-3 py-2.5 text-sm text-gray-900 focus:ring-2 focus:ring-brand-500">
+              <select name="mealType" className="rounded-xl border-0 bg-surface-muted px-3 py-2.5 text-sm text-gray-900 focus:ring-2 focus:ring-brand-500">
                 {MEALS.map((m) => <option key={m.key} value={m.key}>{m.label}</option>)}
               </select>
             </label>
             <label className="grid gap-1 text-sm">
               <div className="text-xs font-medium text-gray-500">Food name</div>
-              <input name="name" required placeholder="Greek yogurt" className="rounded-xl border-0 bg-gray-100 px-3 py-2.5 text-sm placeholder-gray-400 focus:ring-2 focus:ring-brand-500" />
+              <input name="name" required placeholder="Greek yogurt" className="rounded-xl border-0 bg-surface-muted px-3 py-2.5 text-sm placeholder-gray-400 focus:ring-2 focus:ring-brand-500" />
             </label>
           </div>
           <div className="grid gap-2 grid-cols-2">
             <label className="grid gap-1 text-sm">
               <div className="text-xs font-medium text-gray-500">Amount (g)</div>
-              <input name="amount" type="number" step="1" required defaultValue={100} className="rounded-xl border-0 bg-gray-100 px-3 py-2.5 text-sm focus:ring-2 focus:ring-brand-500" />
+              <input name="amount" type="number" step="1" required defaultValue={100} className="rounded-xl border-0 bg-surface-muted px-3 py-2.5 text-sm focus:ring-2 focus:ring-brand-500" />
             </label>
             <label className="grid gap-1 text-sm">
               <div className="text-xs font-medium text-gray-500">Calories / 100g</div>
-              <input name="kcalPer100g" type="number" step="1" required className="rounded-xl border-0 bg-gray-100 px-3 py-2.5 text-sm focus:ring-2 focus:ring-brand-500" />
+              <input name="kcalPer100g" type="number" step="1" required className="rounded-xl border-0 bg-surface-muted px-3 py-2.5 text-sm focus:ring-2 focus:ring-brand-500" />
             </label>
           </div>
           <div className="grid gap-2 grid-cols-3">
             <label className="grid gap-1 text-sm">
               <div className="text-xs font-medium text-gray-500">Protein / 100g</div>
-              <input name="proteinPer100g" type="number" step="1" required className="rounded-xl border-0 bg-gray-100 px-3 py-2.5 text-sm focus:ring-2 focus:ring-brand-500" />
+              <input name="proteinPer100g" type="number" step="1" required className="rounded-xl border-0 bg-surface-muted px-3 py-2.5 text-sm focus:ring-2 focus:ring-brand-500" />
             </label>
             <label className="grid gap-1 text-sm">
               <div className="text-xs font-medium text-gray-500">Carbs / 100g</div>
-              <input name="carbsPer100g" type="number" step="1" required className="rounded-xl border-0 bg-gray-100 px-3 py-2.5 text-sm focus:ring-2 focus:ring-brand-500" />
+              <input name="carbsPer100g" type="number" step="1" required className="rounded-xl border-0 bg-surface-muted px-3 py-2.5 text-sm focus:ring-2 focus:ring-brand-500" />
             </label>
             <label className="grid gap-1 text-sm">
               <div className="text-xs font-medium text-gray-500">Fat / 100g</div>
-              <input name="fatPer100g" type="number" step="1" required className="rounded-xl border-0 bg-gray-100 px-3 py-2.5 text-sm focus:ring-2 focus:ring-brand-500" />
+              <input name="fatPer100g" type="number" step="1" required className="rounded-xl border-0 bg-surface-muted px-3 py-2.5 text-sm focus:ring-2 focus:ring-brand-500" />
             </label>
           </div>
           <input type="hidden" name="unit" value="GRAM" />

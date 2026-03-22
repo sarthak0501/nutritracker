@@ -43,7 +43,19 @@ export default async function TodayPage() {
 
   return (
     <div className="space-y-4">
-      {/* Daily summary — hero card */}
+      {/* 1. PRIMARY: AI Composer — the hero */}
+      <div className="rounded-2xl bg-gradient-to-br from-brand-50 via-white to-accent-50 p-5 shadow-card border border-brand-100">
+        <div className="mb-1 text-lg font-bold text-gray-900">What did you eat today?</div>
+        <div className="mb-4 text-xs text-gray-400">Describe a meal or your whole day — I'll estimate and organize it.</div>
+        <LogMealTabs
+          date={today}
+          onApplyEstimate={applyEstimatedMeal}
+          onApplyDay={applyEstimatedDay}
+          manualAction={createManualFoodAndLogEntry}
+        />
+      </div>
+
+      {/* 2. SECONDARY: Day summary */}
       <Card>
         <div className="flex items-center justify-between mb-4">
           <div>
@@ -55,7 +67,7 @@ export default async function TodayPage() {
               <circle cx="18" cy="18" r="15.5" fill="none" stroke="#f3f4f6" strokeWidth="3" />
               <circle
                 cx="18" cy="18" r="15.5" fill="none"
-                stroke={kcalPct >= 100 ? "#ef4444" : "#10b981"}
+                stroke={kcalPct >= 100 ? "#ef4444" : "#22c55e"}
                 strokeWidth="3"
                 strokeDasharray={`${kcalPct} ${100 - kcalPct}`}
                 strokeLinecap="round"
@@ -88,7 +100,7 @@ export default async function TodayPage() {
               statusColor = "";
             } else if (m.goalType === "min") {
               barColor = val >= tgt ? "bg-green-500" : "bg-orange-400";
-              statusText = diff! > 0 ? `${round1(diff!)}g left` : "✓";
+              statusText = diff! > 0 ? `${round1(diff!)}g left` : "\u2713";
               statusColor = diff! > 0 ? "text-orange-500" : "text-green-500";
             } else {
               barColor = val > tgt ? "bg-red-500" : "bg-green-500";
@@ -125,17 +137,7 @@ export default async function TodayPage() {
         </div>
       </Card>
 
-      {/* Copy yesterday + Frequent meals */}
-      {(copyableMeals.length > 0 || frequentMeals.length > 0) && (
-        <Card>
-          <div className="space-y-4">
-            <CopyYesterdayMeal meals={copyableMeals} fromDate={yesterday} toDate={today} />
-            <FrequentMeals foods={frequentMeals} date={today} />
-          </div>
-        </Card>
-      )}
-
-      {/* Meal suggestions */}
+      {/* 2b. SECONDARY: Meal suggestions */}
       <Card>
         <MealSuggestion
           remainingKcal={remainingKcal}
@@ -145,15 +147,13 @@ export default async function TodayPage() {
         />
       </Card>
 
-      {/* Log a meal */}
-      <Card title="Log a meal">
-        <LogMealTabs
-          date={today}
-          onApplyEstimate={applyEstimatedMeal}
-          onApplyDay={applyEstimatedDay}
-          manualAction={createManualFoodAndLogEntry}
-        />
-      </Card>
+      {/* 3. TERTIARY: Quick actions — copy yesterday + frequent meals */}
+      {(copyableMeals.length > 0 || frequentMeals.length > 0) && (
+        <div className="rounded-2xl bg-surface-muted p-4 space-y-4">
+          <CopyYesterdayMeal meals={copyableMeals} fromDate={yesterday} toDate={today} />
+          <FrequentMeals foods={frequentMeals} date={today} />
+        </div>
+      )}
 
       {/* Logged meals */}
       {mealsWithEntries.length > 0 && (
@@ -185,7 +185,7 @@ export default async function TodayPage() {
                     const n = safeNutrientsForEntry(e, e.food);
                     const reactions = (e.reactions ?? []) as { id: string; type: string; user: { username: string } }[];
                     return (
-                      <div key={e.id} className="rounded-xl bg-gray-50 p-3">
+                      <div key={e.id} className="rounded-xl bg-surface-muted p-3">
                         <div className="flex items-center justify-between gap-3">
                           <div className="min-w-0">
                             <div className="truncate text-sm font-semibold text-gray-800">
@@ -208,7 +208,7 @@ export default async function TodayPage() {
                           <div className="mt-2 flex items-center gap-1 flex-wrap">
                             {reactions.map((r) => (
                               <span key={r.id} className="inline-flex items-center gap-1 rounded-full bg-white px-2 py-0.5 text-xs text-gray-600 shadow-sm">
-                                {r.type === "THUMBS_UP" ? "👍" : r.type === "THUMBS_DOWN" ? "👎" : r.type === "FIRE" ? "🔥" : "💪"}
+                                {r.type === "THUMBS_UP" ? "\uD83D\uDC4D" : r.type === "THUMBS_DOWN" ? "\uD83D\uDC4E" : r.type === "FIRE" ? "\uD83D\uDD25" : "\uD83D\uDCAA"}
                                 <span className="text-gray-400">{r.user.username}</span>
                               </span>
                             ))}
@@ -225,12 +225,14 @@ export default async function TodayPage() {
       )}
 
       {entries.length === 0 && (
-        <div className="text-center py-8 text-sm text-gray-400">
-          No meals logged yet today. Start by adding your first meal above.
+        <div className="text-center py-8">
+          <div className="text-2xl mb-2">🍽️</div>
+          <div className="text-sm font-medium text-gray-500">No meals logged yet today</div>
+          <div className="text-xs text-gray-400 mt-1">Use the composer above to get started</div>
         </div>
       )}
 
-      {/* Buddy feed */}
+      {/* Buddy feed — social card */}
       <BuddyTodayFeed currentUserId={user.id} date={today} />
     </div>
   );

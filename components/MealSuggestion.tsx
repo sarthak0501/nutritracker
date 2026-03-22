@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState } from "react";
 import type { MealSuggestionResponse } from "@/lib/meal-suggestions";
 
 export function MealSuggestion({
@@ -52,14 +52,14 @@ export function MealSuggestion({
       <button
         onClick={fetchSuggestions}
         disabled={loading || remainingKcal <= 0}
-        className="w-full rounded-xl bg-brand-50 px-4 py-3 text-sm font-semibold text-brand-700 hover:bg-brand-100 disabled:opacity-50 transition-all active:scale-[0.98]"
+        className="w-full rounded-xl bg-accent-50 px-4 py-3 text-sm font-semibold text-accent-600 hover:bg-accent-100 disabled:opacity-50 transition-all active:scale-[0.98]"
       >
         {loading ? (
           <span className="inline-flex items-center gap-2">
             <span className="animate-spin">⏳</span> Thinking...
           </span>
         ) : remainingKcal <= 0 ? (
-          "You've hit your calorie target!"
+          "You've hit your calorie target! 🎉"
         ) : (
           `What should I eat for ${mealSlot}?`
         )}
@@ -71,7 +71,7 @@ export function MealSuggestion({
     <div className="space-y-2">
       <div className="flex items-center justify-between">
         <div className="text-xs font-medium text-gray-400 uppercase tracking-wide">
-          Suggestions for {mealSlot}
+          Ideas for {mealSlot}
         </div>
         <button
           onClick={() => setSuggestions(null)}
@@ -81,7 +81,7 @@ export function MealSuggestion({
         </button>
       </div>
       {suggestions.map((s, i) => (
-        <div key={i} className="rounded-xl bg-gray-50 p-3">
+        <div key={i} className="rounded-xl bg-surface-muted p-3">
           <div className="font-semibold text-sm text-gray-800">{s.name}</div>
           <div className="text-xs text-gray-500 mt-0.5">{s.description}</div>
           <div className="flex gap-3 mt-2 text-xs tabular-nums text-gray-500">
