@@ -8,7 +8,7 @@ export function LoginForm() {
 
   return (
     <form action={action} className="space-y-4">
-      <div className="rounded-2xl bg-white p-6 shadow-lg space-y-4">
+      <div className="rounded-2xl bg-surface-card p-6 shadow-card space-y-4">
         <label className="block space-y-1.5">
           <span className="text-sm font-medium text-gray-700">Username</span>
           <input
@@ -16,7 +16,7 @@ export function LoginForm() {
             type="text"
             autoComplete="username"
             required
-            className="w-full rounded-xl border-0 bg-gray-100 px-4 py-3 text-gray-900 placeholder-gray-400 ring-1 ring-transparent focus:bg-white focus:ring-2 focus:ring-brand-500 focus:outline-none transition-all"
+            className="w-full rounded-xl border-0 bg-surface-muted px-4 py-3 text-gray-900 placeholder-gray-400 ring-1 ring-transparent focus:bg-white focus:ring-2 focus:ring-brand-500 focus:outline-none transition-all"
             placeholder="your username"
           />
         </label>
@@ -27,7 +27,7 @@ export function LoginForm() {
             type="password"
             autoComplete="current-password"
             required
-            className="w-full rounded-xl border-0 bg-gray-100 px-4 py-3 text-gray-900 placeholder-gray-400 ring-1 ring-transparent focus:bg-white focus:ring-2 focus:ring-brand-500 focus:outline-none transition-all"
+            className="w-full rounded-xl border-0 bg-surface-muted px-4 py-3 text-gray-900 placeholder-gray-400 ring-1 ring-transparent focus:bg-white focus:ring-2 focus:ring-brand-500 focus:outline-none transition-all"
             placeholder="••••••••"
           />
         </label>

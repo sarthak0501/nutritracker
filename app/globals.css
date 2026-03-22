@@ -2,6 +2,11 @@
 @tailwind components;
 @tailwind utilities;
 
+html {
+  scroll-behavior: smooth;
+  -webkit-tap-highlight-color: transparent;
+}
+
 html,
 body {
   height: 100%;
@@ -10,5 +15,20 @@ body {
 @layer base {
   body {
     font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+    background-color: #fafaf8;
   }
+
+  ::selection {
+    background-color: #dcfce7;
+    color: #166534;
+  }
+}
+
+/* Hide scrollbar on nav */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
 }

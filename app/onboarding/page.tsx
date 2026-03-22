@@ -10,13 +10,13 @@ export default async function OnboardingPage() {
   if (profile?.onboardingCompleted) redirect("/");
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-brand-50 to-gray-50 flex items-start justify-center pt-12 px-4 pb-12">
+    <div className="min-h-screen bg-gradient-to-br from-brand-50 via-surface to-accent-50 flex items-start justify-center pt-12 px-4 pb-12">
       <div className="w-full max-w-sm">
         <div className="mb-8 text-center">
-          <div className="text-3xl font-extrabold tracking-tight text-brand-600">NutriTracker</div>
+          <div className="text-3xl font-extrabold tracking-tight bg-gradient-to-r from-brand-600 to-brand-500 bg-clip-text text-transparent">NutriTracker</div>
           <div className="mt-1 text-sm text-gray-500">Let's get you set up — takes 60 seconds</div>
         </div>
-        <div className="bg-white rounded-2xl shadow-sm p-6">
+        <div className="bg-surface-card rounded-2xl shadow-card p-6">
           <OnboardingWizard />
         </div>
       </div>
