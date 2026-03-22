@@ -1,171 +1,48 @@
 import { Card } from "@/components/Card";
 import { LogMealTabs } from "@/components/LogMealTabs";
-import {
-  applyEstimatedMeal,
-  createManualFoodAndLogEntry,
-  deleteLogEntry,
-} from "@/app/actions/logging";
-import { prisma } from "@/lib/db";
-import { addNutrients, round0, round1, safeNutrientsForEntry, type Nutrients } from "@/lib/nutrition";
+import { applyEstimatedMeal, createManualFoodAndLogEntry, deleteLogEntry } from "@/app/actions/logging";
 import { requireSession } from "@/lib/session";
+import { round0, round1, safeNutrientsForEntry, addNutrients } from "@/lib/nutrition";
 import { BuddyTodayFeed } from "@/components/BuddyTodayFeed";
-import { todayIsoDate, isoDaysBack } from "@/lib/dates";
-import { gradeMeal, gradeColor } from "@/lib/meal-scoring";
+import { todayIsoDate } from "@/lib/dates";
+import { gradeColor } from "@/lib/meal-scoring";
 import { WaterTracker } from "@/components/WaterTracker";
 import { CopyYesterdayMeal } from "@/components/CopyYesterdayMeal";
-import { FrequentMeals, type FrequentFood } from "@/components/FrequentMeals";
+import { FrequentMeals } from "@/components/FrequentMeals";
 import { MealSuggestion } from "@/components/MealSuggestion";
-import Link from "next/link";
-
-const MEAL_META: Record<string, { label: string; icon: string }> = {
-  BREAKFAST: { label: "Breakfast", icon: "🌅" },
-  LUNCH: { label: "Lunch", icon: "☀️" },
-  DINNER: { label: "Dinner", icon: "🌙" },
-  SNACK: { label: "Snacks", icon: "🍎" },
-  CUSTOM: { label: "Custom", icon: "✨" },
-};
-
-function emptyTotals(): Nutrients {
-  return { kcal: 0, protein_g: 0, carbs_g: 0, fat_g: 0, fiber_g: 0, sodium_mg: 0 };
-}
+import { getTodayDashboardData, emptyTotals } from "@/lib/dashboard";
+import { redirect } from "next/navigation";
 
 export default async function TodayPage() {
   const user = await requireSession();
   const today = todayIsoDate();
-  const yesterday = isoDaysBack(1);
 
-  const [profile, workouts, entries, water, yesterdayEntries, frequentRaw] = await Promise.all([
-    prisma.profile.findUnique({ where: { userId: user.id } }),
-    prisma.workoutEntry.findMany({ where: { userId: user.id, date: today } }),
-    prisma.logEntry.findMany({
-      where: { userId: user.id, date: today },
-      include: { food: true, reactions: { include: { user: { select: { id: true, username: true } } } } },
-      orderBy: [{ mealType: "asc" }, { createdAt: "asc" }],
-    }),
-    prisma.waterEntry.findUnique({ where: { userId_date: { userId: user.id, date: today } } }),
-    prisma.logEntry.findMany({
-      where: { userId: user.id, date: yesterday },
-      include: { food: true },
-    }),
-    prisma.logEntry.groupBy({
-      by: ["foodId"],
-      where: { userId: user.id },
-      _count: { foodId: true },
-      orderBy: { _count: { foodId: "desc" } },
-      take: 8,
-    }),
-  ]);
+  const data = await getTodayDashboardData(user.id, today);
 
-  const totalBurned = workouts.reduce((s, e) => s + e.caloriesBurned, 0);
+  if (!data.profile?.onboardingCompleted) redirect("/onboarding");
 
-  // --- Today's meals grouped ---
-  const byMeal = new Map<string, typeof entries>();
-  for (const e of entries) {
-    const arr = byMeal.get(e.mealType) ?? [];
-    arr.push(e);
-    byMeal.set(e.mealType, arr);
-  }
-
-  const dayTotals = entries.reduce((acc, e) => {
-    const n = safeNutrientsForEntry(e, e.food);
-    return n ? addNutrients(acc, n) : acc;
-  }, emptyTotals());
-
-  const mealsWithEntries = Array.from(byMeal.entries()).map(([key, entries]) => ({
-    key,
+  const {
+    profile,
     entries,
-    ...(MEAL_META[key] ?? { label: key, icon: "🍽️" }),
-  }));
-
-  const kcalTarget = profile?.kcalTarget ?? 2000;
-  const kcalPct = Math.min(100, Math.round((Number(dayTotals.kcal) / kcalTarget) * 100));
-  const kcalDiff = kcalTarget - Number(dayTotals.kcal);
-
-  // --- Yesterday's meals for copy feature ---
-  const yesterdayByMeal = new Map<string, typeof yesterdayEntries>();
-  for (const e of yesterdayEntries) {
-    const arr = yesterdayByMeal.get(e.mealType) ?? [];
-    arr.push(e);
-    yesterdayByMeal.set(e.mealType, arr);
-  }
-
-  const copyableMeals = Array.from(yesterdayByMeal.entries())
-    .filter(([mealType]) => !byMeal.has(mealType)) // only show meals not yet logged today
-    .map(([mealType, entries]) => {
-      const totalKcal = entries.reduce((sum, e) => {
-        const n = safeNutrientsForEntry(e, e.food);
-        return sum + (n?.kcal ?? 0);
-      }, 0);
-      const meta = MEAL_META[mealType] ?? { label: mealType, icon: "🍽️" };
-      return { mealType, label: meta.label, icon: meta.icon, itemCount: entries.length, totalKcal };
-    });
-
-  // --- Frequent meals ---
-  const frequentFoodIds = frequentRaw.map((f) => f.foodId);
-  const frequentFoods = frequentFoodIds.length > 0
-    ? await prisma.food.findMany({ where: { id: { in: frequentFoodIds } } })
-    : [];
-
-  // Get last logged amount/unit/mealType for each frequent food
-  const frequentMeals: FrequentFood[] = [];
-  for (const fg of frequentRaw) {
-    const food = frequentFoods.find((f) => f.id === fg.foodId);
-    if (!food) continue;
-    const lastEntry = await prisma.logEntry.findFirst({
-      where: { userId: user.id, foodId: fg.foodId },
-      orderBy: { createdAt: "desc" },
-    });
-    if (!lastEntry) continue;
-    frequentMeals.push({
-      foodId: food.id,
-      name: food.name,
-      count: fg._count.foodId,
-      lastAmount: lastEntry.amount,
-      lastUnit: lastEntry.unit,
-      lastMealType: lastEntry.mealType,
-      kcalPer100g: food.kcalPer100g,
-      proteinPer100g: food.proteinPer100g,
-    });
-  }
-
-  // --- Meal scoring: compute running totals ---
-  const targets = profile
-    ? { kcalTarget: profile.kcalTarget, proteinTarget: profile.proteinTarget, carbsTarget: profile.carbsTarget, fatTarget: profile.fatTarget, fiberTarget: profile.fiberTarget ?? 30 }
-    : null;
-
-  // Build a map of "totals before each meal group" for grading
-  const mealGrades = new Map<string, string>();
-  if (targets) {
-    let runningTotals = emptyTotals();
-    for (const m of mealsWithEntries) {
-      const mealNutrients = m.entries.reduce((acc, e) => {
-        const n = safeNutrientsForEntry(e, e.food);
-        return n ? addNutrients(acc, n) : acc;
-      }, emptyTotals());
-      const grade = gradeMeal(mealNutrients, runningTotals, targets);
-      mealGrades.set(m.key, grade);
-      runningTotals = addNutrients(runningTotals, mealNutrients);
-    }
-  }
-
-  // --- Remaining macros for meal suggestions ---
-  const remainingKcal = Math.max(0, (profile?.kcalTarget ?? 2000) - dayTotals.kcal);
-  const remainingProtein = Math.max(0, (profile?.proteinTarget ?? 120) - dayTotals.protein_g);
-  const remainingCarbs = Math.max(0, (profile?.carbsTarget ?? 250) - dayTotals.carbs_g);
-  const remainingFat = Math.max(0, (profile?.fatTarget ?? 70) - dayTotals.fat_g);
+    water,
+    dayTotals,
+    mealsWithEntries,
+    copyableMeals,
+    frequentMeals,
+    yesterday,
+    mealGrades,
+    totalBurned,
+    kcalTarget,
+    kcalPct,
+    kcalDiff,
+    remainingKcal,
+    remainingProtein,
+    remainingCarbs,
+    remainingFat,
+  } = data;
 
   return (
     <div className="space-y-4">
-      {/* Prompt to set targets */}
-      {!profile && (
-        <div className="rounded-2xl bg-brand-50 p-4 text-sm">
-          <span className="text-brand-800 font-medium">Set your daily targets to track progress.</span>
-          <Link href="/profile" className="ml-2 font-bold text-brand-600 underline underline-offset-2">
-            Set up profile →
-          </Link>
-        </div>
-      )}
-
       {/* Daily summary — hero card */}
       <Card>
         <div className="flex items-center justify-between mb-4">
@@ -238,9 +115,7 @@ export default async function TodayPage() {
             : <span className="tabular-nums font-medium text-red-500">{round0(-kcalDiff)} kcal over</span>
           }
           {totalBurned > 0 && (
-            <span className="tabular-nums text-blue-600 font-medium">
-              {round0(totalBurned)} burned
-            </span>
+            <span className="tabular-nums text-blue-600 font-medium">{round0(totalBurned)} burned</span>
           )}
         </div>
 
@@ -250,7 +125,7 @@ export default async function TodayPage() {
         </div>
       </Card>
 
-      {/* Copy yesterday's meals + Quick log frequent meals */}
+      {/* Copy yesterday + Frequent meals */}
       {(copyableMeals.length > 0 || frequentMeals.length > 0) && (
         <Card>
           <div className="space-y-4">
@@ -260,7 +135,7 @@ export default async function TodayPage() {
         </Card>
       )}
 
-      {/* What should I eat? */}
+      {/* Meal suggestions */}
       <Card>
         <MealSuggestion
           remainingKcal={remainingKcal}
@@ -279,12 +154,11 @@ export default async function TodayPage() {
         />
       </Card>
 
-      {/* Logged meals with grades */}
+      {/* Logged meals */}
       {mealsWithEntries.length > 0 && (
         <div className="space-y-3">
           {mealsWithEntries.map((m) => {
-            const mealEntries = m.entries;
-            const mealTotals = mealEntries.reduce((acc, e) => {
+            const mealTotals = m.entries.reduce((acc, e) => {
               const n = safeNutrientsForEntry(e, e.food);
               return n ? addNutrients(acc, n) : acc;
             }, emptyTotals());
@@ -306,7 +180,7 @@ export default async function TodayPage() {
                   <span className="text-sm font-semibold tabular-nums text-brand-600">{round0(mealTotals.kcal)} kcal</span>
                 </div>
                 <div className="space-y-2">
-                  {mealEntries.map((e) => {
+                  {m.entries.map((e) => {
                     const n = safeNutrientsForEntry(e, e.food);
                     const reactions = (e.reactions ?? []) as { id: string; type: string; user: { username: string } }[];
                     return (

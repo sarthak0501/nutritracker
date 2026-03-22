@@ -6,7 +6,7 @@ export default function LoginPage() {
       <div className="w-full max-w-sm">
         <div className="mb-8 text-center">
           <div className="text-4xl font-extrabold tracking-tight text-brand-600">NutriTracker</div>
-          <div className="mt-2 text-sm text-gray-500">Your nutrition & fitness companion</div>
+          <div className="mt-2 text-sm text-gray-500">AI nutrition coach with buddy accountability</div>
         </div>
         <LoginForm />
       </div>

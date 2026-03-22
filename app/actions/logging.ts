@@ -55,6 +55,7 @@ export async function createManualFoodAndLogEntry(formData: FormData) {
       name,
       brand: parseString(formData.get("brand")) ?? undefined,
       source: "MANUAL",
+      createdByUserId: user.id,
       kcalPer100g,
       proteinPer100g,
       carbsPer100g,
@@ -64,6 +65,7 @@ export async function createManualFoodAndLogEntry(formData: FormData) {
     },
   });
 
+  const factor = parsed.data.amount / 100;
   await prisma.logEntry.create({
     data: {
       userId: user.id,
@@ -73,6 +75,10 @@ export async function createManualFoodAndLogEntry(formData: FormData) {
       amount: parsed.data.amount,
       unit: parsed.data.unit,
       foodId: food.id,
+      snapshotKcal: kcalPer100g * factor,
+      snapshotProteinG: proteinPer100g * factor,
+      snapshotCarbsG: carbsPer100g * factor,
+      snapshotFatG: fatPer100g * factor,
     },
   });
 
@@ -143,6 +149,7 @@ export async function applyEstimatedMeal(input: {
       data: {
         name: item.description,
         source: "LLM",
+        createdByUserId: user.id,
         kcalPer100g: item.nutrients.kcal * per100,
         proteinPer100g: item.nutrients.protein_g * per100,
         carbsPer100g: item.nutrients.carbs_g * per100,
@@ -169,6 +176,10 @@ export async function applyEstimatedMeal(input: {
           originalQuantity: item.quantity,
           originalUnit: item.unit,
         },
+        snapshotKcal: item.nutrients.kcal,
+        snapshotProteinG: item.nutrients.protein_g,
+        snapshotCarbsG: item.nutrients.carbs_g,
+        snapshotFatG: item.nutrients.fat_g,
       },
     });
   }

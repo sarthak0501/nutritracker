@@ -82,6 +82,7 @@ model Profile {
   allergies            String[] @default([])
   dietaryRestrictions  String[] @default([])
   healthConditions     String[] @default([])
+  onboardingCompleted  Boolean  @default(false)
 
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
@@ -92,6 +93,8 @@ model Food {
   name            String
   brand           String?
   source          FoodSource @default(MANUAL)
+
+  createdByUserId String?
 
   barcode         String?    @unique
   offUrl          String?
@@ -131,6 +134,11 @@ model LogEntry {
   sourceText     String?
   isEstimated    Boolean    @default(false)
   estimationMeta Json?
+
+  snapshotKcal     Float?
+  snapshotProteinG Float?
+  snapshotCarbsG   Float?
+  snapshotFatG     Float?
 
   foodId         String
   food           Food       @relation(fields: [foodId], references: [id], onDelete: Cascade)

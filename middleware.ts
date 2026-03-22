@@ -1,7 +1,11 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { jwtVerify } from "jose";
 
-const SECRET = new TextEncoder().encode(process.env.AUTH_SECRET ?? "fallback-secret-change-me");
+function getSecret(): Uint8Array {
+  const secret = process.env.AUTH_SECRET;
+  if (!secret) throw new Error("AUTH_SECRET environment variable is not set.");
+  return new TextEncoder().encode(secret);
+}
 
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
@@ -11,7 +15,7 @@ export async function middleware(req: NextRequest) {
   }
 
   const token = req.cookies.get("nt_session")?.value;
-  const isLoggedIn = token ? await jwtVerify(token, SECRET).then(() => true).catch(() => false) : false;
+  const isLoggedIn = token ? await jwtVerify(token, getSecret()).then(() => true).catch(() => false) : false;
 
   if (!isLoggedIn && pathname !== "/login") {
     return NextResponse.redirect(new URL("/login", req.url));

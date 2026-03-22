@@ -1,85 +1,90 @@
 # NutriTracker
 
-Track the nutrition of everything you eat—**across all daily meals**—and turn it into actionable insights: **macros, micros, targets, and trends over time**.
+**AI-assisted nutrition tracking with social accountability.**
 
-## What it is
+Log meals, hit your macro targets, and stay consistent — with an AI coach that knows your allergies, health conditions, and goals, and a buddy feed that keeps you accountable.
 
-NutriTracker is a personal nutrition logging and analytics app. You log foods for breakfast/lunch/dinner/snacks (and custom meals), and the app calculates:
+## What makes it different
 
-- **Macros**: calories, protein, carbs, fat, fiber (and optionally sugar, saturated fat, etc.)
-- **Micros**: vitamins and minerals (e.g., iron, calcium, potassium, vitamin D, B12)
-- **Totals & remaining** against your daily targets
-- **Trends**: week/month views, rolling averages, and consistency streaks
+Most nutrition apps are calorie calculators. NutriTracker is an **AI nutrition coach with a social layer**:
 
-## Core product idea
+- **Health-aware AI suggestions** — meal recommendations that respect your allergies, dietary restrictions, and pre-existing conditions (diabetes, hypertension, IBS, etc.)
+- **Buddy accountability** — share your daily log with friends, react to each other's meals, see who's on track
+- **Zero-friction logging** — describe what you ate in plain English, AI estimates the macros instantly
+- **Habit-first design** — copy yesterday's meals, quick-log frequent foods, track water and workouts alongside nutrition
+- **Meal grading** — every meal gets an A/B/C/D grade based on how well it fits your remaining budget
 
-- **Fast daily logging**: minimize friction so logging stays sustainable.
-- **Clear targets**: set goals (cut/bulk/maintenance, performance, or health) and get simple “on track / off track” feedback.
-- **Better decisions**: surface patterns like “low fiber on weekdays” or “protein dips on rest days”.
+## Core features
 
-## Key features (planned)
+### Logging
+- AI text estimation: "2 scrambled eggs, toast, banana" → full macro breakdown in seconds
+- Manual entry with barcode and Open Food Facts integration
+- Copy yesterday's meals, quick-log frequent foods
+- Breakfast / Lunch / Dinner / Snacks / Custom meal types
 
-### Food logging
+### Health profile
+- Set allergies, dietary restrictions, and health conditions once
+- AI meal suggestions automatically filter based on your profile
+- Body stats (height, weight, age) for personalised targets
 
-- **Meals**: breakfast, lunch, dinner, snacks + custom meal names
-- **Food entries**: per serving / grams / common units
-- **Favorites & recent foods** for quick repeat logging
-- **Recipes**: save multi-ingredient meals and log them in one tap
+### Targets & tracking
+- Daily targets for calories, protein, carbs, fat, fiber
+- Goal presets: lose weight, maintain, build muscle, improve health
+- Real-time remaining macros and meal-level grading
+- Water intake tracker
+- Weight history with trend chart
 
-### Nutrition breakdown
+### Social (Buddy feed)
+- Connect with friends
+- See their daily meals in a shared feed
+- React with 👍 👎 🔥 💪 to keep each other motivated
 
-- **Per-meal and per-day totals**
-- **Macro split** (e.g., protein/carbs/fat ratio)
-- **Micronutrient coverage** (e.g., % of daily recommended intake)
+### Insights
+- Weekly nutrition summaries
+- Weight and calorie trend charts
+- Workout logging with AI calorie estimates
 
-### Trends & insights
+## Tech stack
 
-- **Daily/weekly/monthly charts**
-- **Rolling averages** (e.g., 7-day protein average)
-- **Nutrient consistency** (variance, adherence to targets)
-- **Flags** for recurring gaps/excesses (e.g., low iron, high sodium)
+- **Next.js 15** (App Router, React Server Components)
+- **Prisma + Neon Postgres** (serverless PostgreSQL)
+- **NextAuth** (username/password auth, JWT sessions)
+- **Tailwind CSS**
+- **Recharts** for data visualisation
+- **OpenAI / Anthropic** (pluggable LLM for AI features)
 
-### Goals & targets
+## Setup
 
-- Customizable targets for **calories, macros, and selected micros**
-- Optional **goal presets** (maintenance, cut, bulk, endurance training)
-- **Adaptive targets** (future): adjust based on weigh-ins or activity level
+```bash
+# 1. Clone and install
+git clone https://github.com/sarthak0501/nutritracker
+cd nutritracker
+npm install
 
-## MVP scope (first build)
+# 2. Configure environment
+cp .env.example .env
+# Fill in DATABASE_URL, AUTH_SECRET, and LLM_API_KEY
 
-- Create a user profile with daily targets
-- Log foods into meals for a date
-- Compute and display macros + a small set of micros
-- Show a simple weekly trend view for calories + protein + fiber
+# 3. Set up database
+npx prisma db push
 
-## Data assumptions
+# 4. Run locally
+npm run dev
+```
 
-NutriTracker can be backed by a nutrition database (to be chosen). Common options:
+### Required environment variables
 
-- A public dataset (e.g., USDA FoodData Central)
-- A curated internal dataset
-- Manual entry (always available as a fallback)
+```
+DATABASE_URL=       # Neon Postgres connection string
+AUTH_SECRET=        # Random secret: openssl rand -base64 32
+LLM_ENABLED=true
+LLM_PROVIDER=       # openai or anthropic
+LLM_API_KEY=        # Your OpenAI or Anthropic key
+LLM_MODEL=          # e.g. gpt-4o-mini or claude-haiku-4-5-20251001
+```
 
-## Non-goals (for now)
+## Privacy
 
-- Medical diagnosis or treatment guidance
-- “Perfect accuracy” claims (nutrition labels and databases vary)
-
-## Privacy principles (intended)
-
-- Your food logs are personal data.
-- Prefer **local-first** or clear export/delete controls.
-- No selling of personal nutrition data.
-
-## Roadmap ideas
-
-- Barcode scanning (mobile)
-- Photo-assisted logging (optional)
-- Meal planning + grocery list
-- Smart suggestions (“add a high-fiber side”)
-- Integrations (fitness trackers, activity, weigh-ins)
-- Export to CSV/JSON and personal dashboards
-
-## Status
-
-This repository currently contains the product idea and documentation. Implementation will be added as the project takes shape.
+- All health data (allergies, conditions, restrictions) is stored only in your database and used solely for personalising your experience
+- No health data is sold or shared
+- Food logs are personal — only you and your approved buddies can see them

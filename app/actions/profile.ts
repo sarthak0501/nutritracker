@@ -62,6 +62,70 @@ export async function updateHealthProfile(formData: FormData) {
   revalidatePath("/profile");
 }
 
+export async function completeOnboarding(data: {
+  goal: string;
+  heightCm?: number;
+  weightKg?: number;
+  age?: number;
+  gender?: string;
+  kcalTarget: number;
+  proteinTarget: number;
+  carbsTarget: number;
+  fatTarget: number;
+  fiberTarget: number;
+  allergies: string[];
+  dietaryRestrictions: string[];
+  healthConditions: string[];
+}) {
+  const user = await requireSession();
+
+  await prisma.profile.upsert({
+    where: { userId: user.id },
+    update: {
+      kcalTarget: data.kcalTarget,
+      proteinTarget: data.proteinTarget,
+      carbsTarget: data.carbsTarget,
+      fatTarget: data.fatTarget,
+      fiberTarget: data.fiberTarget,
+      heightCm: data.heightCm,
+      weightKg: data.weightKg,
+      age: data.age,
+      gender: data.gender,
+      allergies: data.allergies,
+      dietaryRestrictions: data.dietaryRestrictions,
+      healthConditions: data.healthConditions,
+      onboardingCompleted: true,
+    },
+    create: {
+      userId: user.id,
+      kcalTarget: data.kcalTarget,
+      proteinTarget: data.proteinTarget,
+      carbsTarget: data.carbsTarget,
+      fatTarget: data.fatTarget,
+      fiberTarget: data.fiberTarget,
+      heightCm: data.heightCm,
+      weightKg: data.weightKg,
+      age: data.age,
+      gender: data.gender,
+      allergies: data.allergies,
+      dietaryRestrictions: data.dietaryRestrictions,
+      healthConditions: data.healthConditions,
+      onboardingCompleted: true,
+    },
+  });
+
+  if (data.weightKg) {
+    const date = todayIsoDate();
+    await prisma.weightEntry.upsert({
+      where: { userId_date: { userId: user.id, date } },
+      update: { weightKg: data.weightKg },
+      create: { userId: user.id, date, weightKg: data.weightKg },
+    });
+  }
+
+  revalidatePath("/");
+}
+
 const BodyStatsSchema = z.object({
   heightCm: z.number().min(50).max(300).optional(),
   weightKg: z.number().min(20).max(500).optional(),

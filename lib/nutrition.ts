@@ -56,6 +56,21 @@ export function safeNutrientsForEntry(
   entry: LogEntry,
   food: Food
 ): Nutrients | null {
+  // Prefer snapshot nutrients (historical accuracy, immune to food edits)
+  if (
+    entry.snapshotKcal != null &&
+    entry.snapshotProteinG != null &&
+    entry.snapshotCarbsG != null &&
+    entry.snapshotFatG != null
+  ) {
+    return {
+      kcal: entry.snapshotKcal,
+      protein_g: entry.snapshotProteinG,
+      carbs_g: entry.snapshotCarbsG,
+      fat_g: entry.snapshotFatG,
+    };
+  }
+  // Fall back to computed (existing entries without snapshot)
   const grams = gramsForEntry(entry, food);
   if (grams == null || !Number.isFinite(grams) || grams <= 0) return null;
   return nutrientsForGrams(food, grams);

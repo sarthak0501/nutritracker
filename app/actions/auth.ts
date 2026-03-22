@@ -21,6 +21,9 @@ export async function loginAction(
   if (!valid) return "Invalid username or password";
 
   await createSession({ id: user.id, username: user.username });
+
+  const profile = await prisma.profile.findUnique({ where: { userId: user.id } });
+  if (!profile?.onboardingCompleted) redirect("/onboarding");
   redirect("/");
 }
 
