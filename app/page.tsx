@@ -1,6 +1,6 @@
 import { Card } from "@/components/Card";
 import { LogMealTabs } from "@/components/LogMealTabs";
-import { applyEstimatedMeal, createManualFoodAndLogEntry, deleteLogEntry } from "@/app/actions/logging";
+import { applyEstimatedMeal, applyEstimatedDay, createManualFoodAndLogEntry, deleteLogEntry } from "@/app/actions/logging";
 import { requireSession } from "@/lib/session";
 import { round0, round1, safeNutrientsForEntry, addNutrients } from "@/lib/nutrition";
 import { BuddyTodayFeed } from "@/components/BuddyTodayFeed";
@@ -150,6 +150,7 @@ export default async function TodayPage() {
         <LogMealTabs
           date={today}
           onApplyEstimate={applyEstimatedMeal}
+          onApplyDay={applyEstimatedDay}
           manualAction={createManualFoodAndLogEntry}
         />
       </Card>

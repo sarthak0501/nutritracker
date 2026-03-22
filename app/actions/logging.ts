@@ -188,6 +188,81 @@ export async function applyEstimatedMeal(input: {
   revalidatePath("/history");
 }
 
+export async function applyEstimatedDay(input: {
+  date: string;
+  meals: Array<{
+    mealType: string;
+    mealName?: string | null;
+    detectedFrom?: string;
+    items: Array<{
+      description: string;
+      quantity: number;
+      unit: string;
+      nutrients: {
+        kcal: number;
+        protein_g: number;
+        carbs_g: number;
+        fat_g: number;
+        fiber_g?: number;
+      };
+      confidence: number;
+      assumptions: string[];
+    }>;
+  }>;
+  sourceText: string;
+}) {
+  const user = await requireSession();
+
+  await prisma.$transaction(async (tx) => {
+    for (const meal of input.meals) {
+      const mealType = meal.mealType as MealType;
+      for (const item of meal.items) {
+        const per100 = item.quantity > 0 ? 100 / item.quantity : 1;
+        const food = await tx.food.create({
+          data: {
+            name: item.description,
+            source: "LLM",
+            createdByUserId: user.id,
+            kcalPer100g: item.nutrients.kcal * per100,
+            proteinPer100g: item.nutrients.protein_g * per100,
+            carbsPer100g: item.nutrients.carbs_g * per100,
+            fatPer100g: item.nutrients.fat_g * per100,
+            fiberPer100g: item.nutrients.fiber_g != null ? item.nutrients.fiber_g * per100 : undefined,
+          },
+        });
+
+        await tx.logEntry.create({
+          data: {
+            userId: user.id,
+            date: input.date,
+            mealType,
+            mealName: meal.mealName ?? undefined,
+            amount: item.quantity,
+            unit: "GRAM",
+            foodId: food.id,
+            isEstimated: true,
+            sourceText: input.sourceText,
+            estimationMeta: {
+              confidence: item.confidence,
+              assumptions: item.assumptions,
+              originalQuantity: item.quantity,
+              originalUnit: item.unit,
+              detectedFrom: meal.detectedFrom,
+            },
+            snapshotKcal: item.nutrients.kcal,
+            snapshotProteinG: item.nutrients.protein_g,
+            snapshotCarbsG: item.nutrients.carbs_g,
+            snapshotFatG: item.nutrients.fat_g,
+          },
+        });
+      }
+    }
+  });
+
+  revalidatePath("/");
+  revalidatePath("/history");
+}
+
 export async function copyMealFromDate(input: {
   fromDate: string;
   toDate: string;

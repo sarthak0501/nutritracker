@@ -5,6 +5,7 @@ import { prisma } from "@/lib/db";
 import { addNutrients, round0, round1, safeNutrientsForEntry, type Nutrients } from "@/lib/nutrition";
 import {
   applyEstimatedMeal,
+  applyEstimatedDay,
   createManualFoodAndLogEntry,
   deleteLogEntry,
 } from "@/app/actions/logging";
@@ -188,6 +189,7 @@ export default async function HistoryPage({
         <LogMealTabs
           date={date}
           onApplyEstimate={applyEstimatedMeal}
+          onApplyDay={applyEstimatedDay}
           manualAction={createManualFoodAndLogEntry}
         />
       </Card>
