@@ -16,9 +16,9 @@ import {
 
 export type TrendPoint = {
   date: string;
-  kcal: number;
-  protein_g: number;
-  fiber_g: number;
+  kcal: number | null;
+  protein_g: number | null;
+  fiber_g: number | null;
 };
 
 export type WorkoutTrendPoint = {

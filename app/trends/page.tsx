@@ -54,7 +54,6 @@ export default async function TrendsPage({
 
   // --- Nutrition data ---
   const totalsByDate = new Map<string, ReturnType<typeof empty>>();
-  for (const d of days) totalsByDate.set(d, empty());
 
   for (const e of entries) {
     const n = safeNutrientsForEntry(e, e.food);
@@ -64,7 +63,8 @@ export default async function TrendsPage({
   }
 
   const nutritionData: TrendPoint[] = days.map((d) => {
-    const t = totalsByDate.get(d) ?? empty();
+    const t = totalsByDate.get(d);
+    if (!t) return { date: d, kcal: null, protein_g: null, fiber_g: null };
     return {
       date: d,
       kcal: Math.round(t.kcal),
@@ -97,14 +97,15 @@ export default async function TrendsPage({
   });
 
   // --- Averages ---
-  const daysWithFood = nutritionData.filter((d) => d.kcal > 0).length || 1;
+  const daysWithFood = nutritionData.filter((d) => d.kcal !== null).length || 1;
   const daysWithWorkout = workoutData.filter((d) => d.caloriesBurned > 0).length || 1;
 
   const nutritionSum = nutritionData.reduce(
     (acc, p) => {
+      if (p.kcal === null) return acc;
       acc.kcal += p.kcal;
-      acc.protein += p.protein_g;
-      acc.fiber += p.fiber_g;
+      acc.protein += p.protein_g ?? 0;
+      acc.fiber += p.fiber_g ?? 0;
       return acc;
     },
     { kcal: 0, protein: 0, fiber: 0 }
@@ -369,9 +370,11 @@ export default async function TrendsPage({
               const weekDays = days.slice(weekIdx * 7, (weekIdx + 1) * 7);
               if (weekDays.length === 0) return null;
 
+              const weekLoggedDays = weekDays.filter((d) => totalsByDate.has(d)).length || 1;
               const weekNutrition = weekDays.reduce(
                 (acc, d) => {
-                  const t = totalsByDate.get(d) ?? empty();
+                  const t = totalsByDate.get(d);
+                  if (!t) return acc;
                   acc.kcal += t.kcal;
                   acc.protein += t.protein_g;
                   return acc;
@@ -396,8 +399,8 @@ export default async function TrendsPage({
                 <div key={weekIdx} className="rounded-xl bg-surface-muted p-3">
                   <div className="text-xs font-medium text-gray-500 mb-1.5">{weekLabel}</div>
                   <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm tabular-nums sm:grid-cols-3">
-                    <span>{Math.round(weekNutrition.kcal / weekDays.length)} kcal/day</span>
-                    <span>{toFixed1(weekNutrition.protein / weekDays.length)}g protein/day</span>
+                    <span>{Math.round(weekNutrition.kcal / weekLoggedDays)} kcal/day</span>
+                    <span>{toFixed1(weekNutrition.protein / weekLoggedDays)}g protein/day</span>
                     <span>{Math.round(weekWorkout.burned)} kcal burned</span>
                     <span>{Math.round(weekWorkout.volume)}kg volume</span>
                     <span>{weekWorkout.sessions} workout days</span>
