@@ -79,6 +79,7 @@ export async function createManualFoodAndLogEntry(formData: FormData) {
       snapshotProteinG: proteinPer100g * factor,
       snapshotCarbsG: carbsPer100g * factor,
       snapshotFatG: fatPer100g * factor,
+      snapshotFiberG: (parseNumber(formData.get("fiberPer100g")) ?? 0) * factor || undefined,
     },
   });
 
@@ -180,6 +181,7 @@ export async function applyEstimatedMeal(input: {
         snapshotProteinG: item.nutrients.protein_g,
         snapshotCarbsG: item.nutrients.carbs_g,
         snapshotFatG: item.nutrients.fat_g,
+        snapshotFiberG: item.nutrients.fiber_g ?? undefined,
       },
     });
   }
@@ -253,6 +255,7 @@ export async function applyEstimatedDay(input: {
             snapshotProteinG: item.nutrients.protein_g,
             snapshotCarbsG: item.nutrients.carbs_g,
             snapshotFatG: item.nutrients.fat_g,
+            snapshotFiberG: item.nutrients.fiber_g ?? undefined,
           },
         });
       }

@@ -68,6 +68,7 @@ export function safeNutrientsForEntry(
       protein_g: entry.snapshotProteinG,
       carbs_g: entry.snapshotCarbsG,
       fat_g: entry.snapshotFatG,
+      fiber_g: entry.snapshotFiberG ?? undefined,
     };
   }
   // Fall back to computed (existing entries without snapshot)

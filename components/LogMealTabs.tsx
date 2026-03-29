@@ -115,7 +115,7 @@ export function LogMealTabs({
               <input name="kcalPer100g" type="number" step="1" required className="rounded-xl border-0 bg-surface-muted px-3 py-2.5 text-sm focus:ring-2 focus:ring-brand-500" />
             </label>
           </div>
-          <div className="grid gap-2 grid-cols-3">
+          <div className="grid gap-2 grid-cols-4">
             <label className="grid gap-1 text-sm">
               <div className="text-xs font-medium text-gray-500">Protein / 100g</div>
               <input name="proteinPer100g" type="number" step="1" required className="rounded-xl border-0 bg-surface-muted px-3 py-2.5 text-sm focus:ring-2 focus:ring-brand-500" />
@@ -127,6 +127,10 @@ export function LogMealTabs({
             <label className="grid gap-1 text-sm">
               <div className="text-xs font-medium text-gray-500">Fat / 100g</div>
               <input name="fatPer100g" type="number" step="1" required className="rounded-xl border-0 bg-surface-muted px-3 py-2.5 text-sm focus:ring-2 focus:ring-brand-500" />
+            </label>
+            <label className="grid gap-1 text-sm">
+              <div className="text-xs font-medium text-gray-500">Fiber / 100g</div>
+              <input name="fiberPer100g" type="number" step="0.1" min="0" className="rounded-xl border-0 bg-surface-muted px-3 py-2.5 text-sm focus:ring-2 focus:ring-brand-500" />
             </label>
           </div>
           <input type="hidden" name="unit" value="GRAM" />

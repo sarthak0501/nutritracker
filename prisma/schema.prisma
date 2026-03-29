@@ -139,6 +139,7 @@ model LogEntry {
   snapshotProteinG Float?
   snapshotCarbsG   Float?
   snapshotFatG     Float?
+  snapshotFiberG   Float?
 
   foodId         String
   food           Food       @relation(fields: [foodId], references: [id], onDelete: Cascade)
