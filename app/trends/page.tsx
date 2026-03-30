@@ -145,19 +145,7 @@ export default async function TrendsPage({
       ? toFixed1(weightData[weightData.length - 1].weightKg - weightData[0].weightKg)
       : null;
 
-  // --- Goal progress ---
   const hasGoals = !!profile;
-  const todayNutrition = nutritionData[nutritionData.length - 1];
-  const todayWorkout = workoutData[workoutData.length - 1];
-
-  type GoalItem = { label: string; current: number; target: number; unit: string };
-  const goals: GoalItem[] = [];
-  if (profile) {
-    goals.push({ label: "Calories", current: todayNutrition?.kcal ?? 0, target: profile.kcalTarget, unit: "kcal" });
-    goals.push({ label: "Protein", current: todayNutrition?.protein_g ?? 0, target: profile.proteinTarget, unit: "g" });
-    goals.push({ label: "Carbs", current: Math.round((totalsByDate.get(days[days.length - 1]) ?? empty()).carbs_g), target: profile.carbsTarget, unit: "g" });
-    goals.push({ label: "Fat", current: Math.round((totalsByDate.get(days[days.length - 1]) ?? empty()).fat_g), target: profile.fatTarget, unit: "g" });
-  }
 
   // Insight text
   const proteinGoalMet = daysWithFood > 0 && profile ? avgNutrition.protein >= profile.proteinTarget * 0.9 : false;
@@ -218,49 +206,17 @@ export default async function TrendsPage({
         )}
       </Card>
 
-      {/* Today's goal progress */}
-      {hasGoals && (
-        <Card title="Today's goals">
-          <div className="grid gap-2">
-            {goals.map((g) => {
-              const pct = g.target > 0 ? Math.min(100, Math.round((g.current / g.target) * 100)) : 0;
-              const over = g.current > g.target;
-              return (
-                <div key={g.label}>
-                  <div className="flex items-baseline justify-between text-sm">
-                    <span className="text-gray-600">{g.label}</span>
-                    <span className="tabular-nums text-xs text-gray-500">
-                      {g.current} / {Math.round(g.target)} {g.unit}
-                      {over && <span className="ml-1 text-amber-600">(over)</span>}
-                    </span>
-                  </div>
-                  <div className="mt-1 h-2 rounded-full bg-gray-100 overflow-hidden">
-                    <div
-                      className={`h-full rounded-full transition-all ${
-                        over ? "bg-amber-400" : pct >= 80 ? "bg-green-500" : "bg-gray-400"
-                      }`}
-                      style={{ width: `${Math.min(100, pct)}%` }}
-                    />
-                  </div>
-                </div>
-              );
-            })}
-            {todayWorkout && todayWorkout.caloriesBurned > 0 && (
-              <div className="mt-1 text-xs text-gray-500">
-                Net calories today: {(todayNutrition?.kcal ?? 0) - todayWorkout.caloriesBurned} kcal
-                ({todayWorkout.caloriesBurned} burned)
-              </div>
+      {/* Calorie heatmap — shown right after header for 30d view */}
+      {range === 30 && profile && (
+        <Card title="Logging consistency">
+          <CalendarHeatmap
+            days={days}
+            kcalByDate={Object.fromEntries(
+              days.map((d) => [d, Math.round(totalsByDate.get(d)?.kcal ?? 0)])
             )}
-          </div>
+            kcalTarget={profile.kcalTarget}
+          />
         </Card>
-      )}
-
-      {!hasGoals && (
-        <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm">
-          <span className="text-amber-800">Set daily targets in </span>
-          <Link href="/profile" className="font-medium text-amber-900 underline">Profile</Link>
-          <span className="text-amber-800"> to track goal progress here.</span>
-        </div>
       )}
 
       {/* Nutrition trends */}
@@ -359,19 +315,6 @@ export default async function TrendsPage({
             workoutDays={avgWorkout.activeDays}
             totalBurned={workoutSum.burned}
             weightChange={weightChange}
-          />
-        </Card>
-      )}
-
-      {/* Calorie heatmap (30d view) */}
-      {range === 30 && profile && (
-        <Card title="Logging consistency">
-          <CalendarHeatmap
-            days={days}
-            kcalByDate={Object.fromEntries(
-              days.map((d) => [d, Math.round(totalsByDate.get(d)?.kcal ?? 0)])
-            )}
-            kcalTarget={profile.kcalTarget}
           />
         </Card>
       )}
