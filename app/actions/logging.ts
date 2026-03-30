@@ -105,6 +105,12 @@ export async function createLogEntryFromExistingFood(formData: FormData) {
   const food = await prisma.food.findUnique({ where: { id: foodId } });
   if (!food) throw new Error("Food not found");
 
+  const grams =
+    parsed.data.unit === "SERVING" && food.servingGrams
+      ? parsed.data.amount * food.servingGrams
+      : parsed.data.amount;
+  const factor = grams / 100;
+
   await prisma.logEntry.create({
     data: {
       userId: user.id,
@@ -115,6 +121,49 @@ export async function createLogEntryFromExistingFood(formData: FormData) {
       unit: parsed.data.unit,
       foodId: food.id,
       isEstimated: false,
+      snapshotKcal: food.kcalPer100g * factor,
+      snapshotProteinG: food.proteinPer100g * factor,
+      snapshotCarbsG: food.carbsPer100g * factor,
+      snapshotFatG: food.fatPer100g * factor,
+      snapshotFiberG: food.fiberPer100g != null ? food.fiberPer100g * factor : undefined,
+    },
+  });
+
+  revalidatePath("/");
+  revalidatePath("/history");
+}
+
+export async function updateLogEntry(formData: FormData) {
+  const user = await requireSession();
+  const id = parseString(formData.get("id"));
+  const amount = parseNumber(formData.get("amount"));
+  const mealType = parseString(formData.get("mealType")) as MealType | null;
+
+  if (!id || !amount || !mealType) throw new Error("Missing fields");
+
+  const entry = await prisma.logEntry.findFirst({
+    where: { id, userId: user.id },
+    include: { food: true },
+  });
+  if (!entry) throw new Error("Entry not found");
+
+  const grams =
+    entry.unit === "SERVING" && entry.food.servingGrams
+      ? amount * entry.food.servingGrams
+      : amount;
+  const factor = grams / 100;
+
+  await prisma.logEntry.update({
+    where: { id },
+    data: {
+      amount,
+      mealType,
+      snapshotKcal: entry.food.kcalPer100g * factor,
+      snapshotProteinG: entry.food.proteinPer100g * factor,
+      snapshotCarbsG: entry.food.carbsPer100g * factor,
+      snapshotFatG: entry.food.fatPer100g * factor,
+      snapshotFiberG:
+        entry.food.fiberPer100g != null ? entry.food.fiberPer100g * factor : undefined,
     },
   });
 

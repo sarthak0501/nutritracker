@@ -1,4 +1,5 @@
 import { Card } from "@/components/Card";
+import { LogEntryCard } from "@/components/LogEntryCard";
 import { LogMealTabs } from "@/components/LogMealTabs";
 import { LogWorkoutTabs } from "@/components/LogWorkoutTabs";
 import { prisma } from "@/lib/db";
@@ -7,7 +8,6 @@ import {
   applyEstimatedMeal,
   applyEstimatedDay,
   createManualFoodAndLogEntry,
-  deleteLogEntry,
 } from "@/app/actions/logging";
 import {
   applyEstimatedWorkout,
@@ -208,25 +208,21 @@ export default async function HistoryPage({
             <div className="space-y-2">
               {mealEntries.map((e) => {
                 const n = safeNutrientsForEntry(e, e.food);
+                const macroLine = [
+                  `${round1(e.amount)} ${e.unit === "GRAM" ? "g" : "serving"}`,
+                  n ? `${round0(n.kcal)} cal · ${round1(n.protein_g)}P ${round1(n.carbs_g)}C ${round1(n.fat_g)}F` : "",
+                ].filter(Boolean).join(" · ");
                 return (
-                  <div key={e.id} className="flex items-center justify-between gap-3 rounded-xl bg-surface-muted p-3">
-                    <div className="min-w-0">
-                      <div className="truncate text-sm font-semibold text-gray-800">
-                        {e.food.name}
-                        {e.food.brand && <span className="font-normal text-gray-400"> ({e.food.brand})</span>}
-                      </div>
-                      <div className="text-xs text-gray-500 mt-0.5">
-                        {round1(e.amount)} {e.unit === "GRAM" ? "g" : "serving"}
-                        {n ? <> · {round0(n.kcal)} cal · {round1(n.protein_g)}P {round1(n.carbs_g)}C {round1(n.fat_g)}F</> : ""}
-                      </div>
-                    </div>
-                    <form action={deleteLogEntry}>
-                      <input type="hidden" name="id" value={e.id} />
-                      <button className="rounded-lg p-1.5 text-gray-300 hover:bg-red-50 hover:text-red-400 transition-colors">
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
-                      </button>
-                    </form>
-                  </div>
+                  <LogEntryCard
+                    key={e.id}
+                    entryId={e.id}
+                    foodName={e.food.name}
+                    brand={e.food.brand}
+                    amount={e.amount}
+                    unit={e.unit}
+                    mealType={e.mealType}
+                    macroLine={macroLine}
+                  />
                 );
               })}
             </div>
