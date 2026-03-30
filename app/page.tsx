@@ -1,4 +1,5 @@
 import { Card } from "@/components/Card";
+import { MacroBars } from "@/components/MacroBars";
 import { LogMealTabs } from "@/components/LogMealTabs";
 import { applyEstimatedMeal, applyEstimatedDay, createManualFoodAndLogEntry, deleteLogEntry } from "@/app/actions/logging";
 import { requireSession } from "@/lib/session";
@@ -39,6 +40,7 @@ export default async function TodayPage() {
     remainingProtein,
     remainingCarbs,
     remainingFat,
+    streak,
   } = data;
 
   return (
@@ -60,7 +62,14 @@ export default async function TodayPage() {
         <div className="flex items-center justify-between mb-4">
           <div>
             <div className="text-xs font-medium text-gray-400 uppercase tracking-wide">{today}</div>
-            <div className="text-lg font-bold text-gray-900 mt-0.5">Hi, {user.name}</div>
+            <div className="flex items-center gap-2 mt-0.5">
+              <div className="text-lg font-bold text-gray-900">Hi, {user.name}</div>
+              {streak > 0 && (
+                <span className="inline-flex items-center gap-1 rounded-full bg-orange-50 px-2 py-0.5 text-xs font-bold text-orange-500 border border-orange-100">
+                  🔥 {streak}d
+                </span>
+              )}
+            </div>
           </div>
           <div className="relative flex items-center justify-center">
             <svg className="w-16 h-16 -rotate-90" viewBox="0 0 36 36">
@@ -81,44 +90,12 @@ export default async function TodayPage() {
         </div>
 
         {/* Macro bars */}
-        <div className="grid grid-cols-4 gap-3">
-          {[
-            { label: "Protein", value: dayTotals.protein_g, target: profile?.proteinTarget, unit: "g", goalType: "min" as const },
-            { label: "Carbs", value: dayTotals.carbs_g, target: profile?.carbsTarget, unit: "g", goalType: "max" as const },
-            { label: "Fat", value: dayTotals.fat_g, target: profile?.fatTarget, unit: "g", goalType: "max" as const },
-            { label: "Fiber", value: dayTotals.fiber_g ?? 0, target: profile?.fiberTarget, unit: "g", goalType: "min" as const },
-          ].map((m) => {
-            const val = Number(m.value);
-            const tgt = m.target ?? null;
-            const pct = tgt ? Math.min(100, Math.round((val / tgt) * 100)) : 0;
-            const diff = tgt !== null ? tgt - val : null;
-            let barColor: string;
-            let statusText: string | null = null;
-            let statusColor: string;
-            if (tgt === null) {
-              barColor = "bg-gray-300";
-              statusColor = "";
-            } else if (m.goalType === "min") {
-              barColor = val >= tgt ? "bg-green-500" : "bg-orange-400";
-              statusText = diff! > 0 ? `${round1(diff!)}g left` : "\u2713";
-              statusColor = diff! > 0 ? "text-orange-500" : "text-green-500";
-            } else {
-              barColor = val > tgt ? "bg-red-500" : "bg-green-500";
-              statusText = diff! >= 0 ? `${round1(diff!)}g left` : `+${round1(-diff!)}g over`;
-              statusColor = diff! >= 0 ? "text-gray-400" : "text-red-500";
-            }
-            return (
-              <div key={m.label} className="text-center">
-                <div className="text-xs font-bold tabular-nums text-gray-800">{round1(val)}{m.unit}</div>
-                <div className="mt-1 h-1.5 rounded-full bg-gray-100 overflow-hidden">
-                  <div className={`h-full rounded-full ${barColor}`} style={{ width: `${pct}%` }} />
-                </div>
-                <div className="mt-1 text-[10px] text-gray-400">{m.label}</div>
-                {statusText && <div className={`text-[9px] font-medium tabular-nums ${statusColor}`}>{statusText}</div>}
-              </div>
-            );
-          })}
-        </div>
+        <MacroBars macros={[
+          { label: "Protein", value: dayTotals.protein_g, target: profile?.proteinTarget, unit: "g", goalType: "min" },
+          { label: "Carbs", value: dayTotals.carbs_g, target: profile?.carbsTarget, unit: "g", goalType: "max" },
+          { label: "Fat", value: dayTotals.fat_g, target: profile?.fatTarget, unit: "g", goalType: "max" },
+          { label: "Fiber", value: dayTotals.fiber_g ?? 0, target: profile?.fiberTarget, unit: "g", goalType: "min" },
+        ]} />
 
         {/* Bottom stats */}
         <div className="mt-3 flex items-center justify-between text-xs text-gray-500">
@@ -174,7 +151,7 @@ export default async function TodayPage() {
                     <span className="text-lg">{m.icon}</span>
                     <span className="text-sm font-bold text-gray-800">{m.label}</span>
                     {grade && (
-                      <span className={`rounded-md px-1.5 py-0.5 text-[10px] font-bold ${gradeColor(grade as "A" | "B" | "C" | "D")}`}>
+                      <span className={`rounded-lg px-2.5 py-1 text-xs font-extrabold tracking-wide shadow-sm ${gradeColor(grade as "A" | "B" | "C" | "D")}`}>
                         {grade}
                       </span>
                     )}

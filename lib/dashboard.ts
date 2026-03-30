@@ -19,7 +19,7 @@ export function emptyTotals(): Nutrients {
 export async function getTodayDashboardData(userId: string, today: string) {
   const yesterday = isoDaysBack(1);
 
-  const [profile, workouts, entries, water, yesterdayEntries, frequentRaw] = await Promise.all([
+  const [profile, workouts, entries, water, yesterdayEntries, frequentRaw, allLogDates] = await Promise.all([
     prisma.profile.findUnique({ where: { userId } }),
     prisma.workoutEntry.findMany({ where: { userId, date: today } }),
     prisma.logEntry.findMany({
@@ -38,6 +38,12 @@ export async function getTodayDashboardData(userId: string, today: string) {
       _count: { foodId: true },
       orderBy: { _count: { foodId: "desc" } },
       take: 8,
+    }),
+    prisma.logEntry.findMany({
+      where: { userId },
+      select: { date: true },
+      distinct: ["date"],
+      orderBy: { date: "desc" },
     }),
   ]);
 
@@ -137,6 +143,12 @@ export async function getTodayDashboardData(userId: string, today: string) {
   const kcalPct = Math.min(100, Math.round((dayTotals.kcal / kcalTarget) * 100));
   const kcalDiff = kcalTarget - dayTotals.kcal;
 
+  // Streak: consecutive logged days ending today or yesterday
+  const logDateSet = new Set(allLogDates.map((d) => d.date));
+  let streak = 0;
+  let streakStart = logDateSet.has(today) ? 0 : 1;
+  while (logDateSet.has(isoDaysBack(streakStart + streak))) streak++;
+
   return {
     profile,
     entries,
@@ -156,5 +168,6 @@ export async function getTodayDashboardData(userId: string, today: string) {
     remainingProtein: Math.max(0, (profile?.proteinTarget ?? 120) - dayTotals.protein_g),
     remainingCarbs: Math.max(0, (profile?.carbsTarget ?? 250) - dayTotals.carbs_g),
     remainingFat: Math.max(0, (profile?.fatTarget ?? 70) - dayTotals.fat_g),
+    streak,
   };
 }

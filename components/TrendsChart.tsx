@@ -1,17 +1,18 @@
 "use client";
 
 import {
-  LineChart,
+  ComposedChart,
   Line,
+  Area,
   BarChart,
   Bar,
   AreaChart,
-  Area,
   XAxis,
   YAxis,
   Tooltip,
   Legend,
   ResponsiveContainer,
+  ReferenceLine,
 } from "recharts";
 
 export type TrendPoint = {
@@ -33,12 +34,18 @@ export type WeightTrendPoint = {
   weightKg: number;
 };
 
-export function NutritionChart({ data }: { data: TrendPoint[] }) {
+export function NutritionChart({ data, kcalTarget }: { data: TrendPoint[]; kcalTarget?: number }) {
   const formatted = data.map((d) => ({ ...d, date: d.date.slice(5) }));
 
   return (
     <ResponsiveContainer width="100%" height={260}>
-      <LineChart data={formatted} margin={{ top: 5, right: 10, left: -10, bottom: 5 }}>
+      <ComposedChart data={formatted} margin={{ top: 5, right: 10, left: -10, bottom: 5 }}>
+        <defs>
+          <linearGradient id="kcalGradient" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="5%" stopColor="#10b981" stopOpacity={0.2} />
+            <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
+          </linearGradient>
+        </defs>
         <XAxis dataKey="date" tick={{ fontSize: 11, fill: "#9ca3af" }} />
         <YAxis tick={{ fontSize: 11, fill: "#9ca3af" }} />
         <Tooltip
@@ -46,10 +53,19 @@ export function NutritionChart({ data }: { data: TrendPoint[] }) {
           labelStyle={{ color: "#6b7280", fontWeight: 600 }}
         />
         <Legend wrapperStyle={{ fontSize: 12 }} />
-        <Line type="monotone" dataKey="kcal" stroke="#10b981" dot={false} strokeWidth={2.5} name="Calories" />
-        <Line type="monotone" dataKey="protein_g" stroke="#3b82f6" dot={false} strokeWidth={2} name="Protein (g)" />
-        <Line type="monotone" dataKey="fiber_g" stroke="#f59e0b" dot={false} strokeWidth={2} name="Fiber (g)" />
-      </LineChart>
+        {kcalTarget && (
+          <ReferenceLine
+            y={kcalTarget}
+            stroke="#10b981"
+            strokeDasharray="5 3"
+            strokeOpacity={0.5}
+            label={{ value: "target", position: "insideTopRight", fontSize: 10, fill: "#10b981" }}
+          />
+        )}
+        <Area type="monotone" dataKey="kcal" stroke="#10b981" fill="url(#kcalGradient)" strokeWidth={2.5} name="Calories" connectNulls={false} dot={false} />
+        <Line type="monotone" dataKey="protein_g" stroke="#3b82f6" dot={false} strokeWidth={2} name="Protein (g)" connectNulls={false} />
+        <Line type="monotone" dataKey="fiber_g" stroke="#f59e0b" dot={false} strokeWidth={2} name="Fiber (g)" connectNulls={false} />
+      </ComposedChart>
     </ResponsiveContainer>
   );
 }

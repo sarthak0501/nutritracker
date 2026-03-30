@@ -35,6 +35,7 @@ export function LogMealTabs({
   manualAction: (formData: FormData) => Promise<void>;
 }) {
   const [mode, setMode] = useState<"quick" | "fullday" | "manual">("quick");
+  const [amount, setAmount] = useState(100);
 
   return (
     <div>
@@ -108,7 +109,28 @@ export function LogMealTabs({
           <div className="grid gap-2 grid-cols-2">
             <label className="grid gap-1 text-sm">
               <div className="text-xs font-medium text-gray-500">Amount (g)</div>
-              <input name="amount" type="number" step="1" required defaultValue={100} className="rounded-xl border-0 bg-surface-muted px-3 py-2.5 text-sm focus:ring-2 focus:ring-brand-500" />
+              <div className="flex items-center rounded-xl bg-surface-muted overflow-hidden">
+                <button
+                  type="button"
+                  onClick={() => setAmount((a) => Math.max(1, a - 10))}
+                  className="px-3 py-2.5 text-gray-500 hover:bg-gray-200 active:bg-gray-300 transition-colors font-bold text-base leading-none"
+                >−</button>
+                <input
+                  name="amount"
+                  type="number"
+                  step="1"
+                  min="1"
+                  required
+                  value={amount}
+                  onChange={(e) => setAmount(Math.max(1, Number(e.target.value) || 1))}
+                  className="w-12 border-0 bg-transparent text-center text-sm font-semibold tabular-nums focus:outline-none focus:ring-0"
+                />
+                <button
+                  type="button"
+                  onClick={() => setAmount((a) => a + 10)}
+                  className="px-3 py-2.5 text-gray-500 hover:bg-gray-200 active:bg-gray-300 transition-colors font-bold text-base leading-none"
+                >+</button>
+              </div>
             </label>
             <label className="grid gap-1 text-sm">
               <div className="text-xs font-medium text-gray-500">Calories / 100g</div>

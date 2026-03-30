@@ -9,6 +9,7 @@ import {
   type WeightTrendPoint,
 } from "@/components/TrendsChart";
 import { WeeklySummary } from "@/components/WeeklySummary";
+import { CalendarHeatmap } from "@/components/CalendarHeatmap";
 import { prisma } from "@/lib/db";
 import { addNutrients, safeNutrientsForEntry } from "@/lib/nutrition";
 import { isoDaysBack, lastIsoDates } from "@/lib/dates";
@@ -278,7 +279,7 @@ export default async function TrendsPage({
             <div className="mt-1 text-lg font-semibold tabular-nums">{avgNutrition.fiber} g</div>
           </div>
         </div>
-        <NutritionChart data={nutritionData} />
+        <NutritionChart data={nutritionData} kcalTarget={profile?.kcalTarget} />
       </Card>
 
       {/* Workout trends */}
@@ -358,6 +359,19 @@ export default async function TrendsPage({
             workoutDays={avgWorkout.activeDays}
             totalBurned={workoutSum.burned}
             weightChange={weightChange}
+          />
+        </Card>
+      )}
+
+      {/* Calorie heatmap (30d view) */}
+      {range === 30 && profile && (
+        <Card title="Logging consistency">
+          <CalendarHeatmap
+            days={days}
+            kcalByDate={Object.fromEntries(
+              days.map((d) => [d, Math.round(totalsByDate.get(d)?.kcal ?? 0)])
+            )}
+            kcalTarget={profile.kcalTarget}
           />
         </Card>
       )}
