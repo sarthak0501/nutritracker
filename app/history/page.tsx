@@ -188,6 +188,7 @@ export default async function HistoryPage({
           manualAction={createManualWorkoutEntry}
           onAddRecommended={addRecommendedExercise}
           onAddAllRecommended={addAllRecommendedExercises}
+          showCoach={false}
         />
       </Card>
 

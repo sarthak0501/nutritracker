@@ -28,6 +28,7 @@ export function LogWorkoutTabs({
   manualAction,
   onAddRecommended,
   onAddAllRecommended,
+  showCoach = true,
 }: {
   date: string;
   weightKg?: number;
@@ -48,6 +49,7 @@ export function LogWorkoutTabs({
   manualAction: (formData: FormData) => Promise<void>;
   onAddRecommended: (input: { date: string; exercise: ExerciseWithWeight }) => Promise<void>;
   onAddAllRecommended: (input: { date: string; exercises: ExerciseWithWeight[] }) => Promise<void>;
+  showCoach?: boolean;
 }) {
   const [tab, setTab] = useState<"log" | "recommend">("log");
   const [logMode, setLogMode] = useState<"ai" | "manual">("ai");
@@ -66,16 +68,18 @@ export function LogWorkoutTabs({
         >
           Describe workout
         </button>
-        <button
-          onClick={() => setTab("recommend")}
-          className={`flex-1 rounded-xl py-2.5 text-sm font-bold transition-all ${
-            tab === "recommend"
-              ? "bg-brand-600 text-white shadow-sm"
-              : "bg-surface-muted text-gray-500 hover:text-gray-700 hover:bg-gray-200"
-          }`}
-        >
-          Coach me
-        </button>
+        {showCoach && (
+          <button
+            onClick={() => setTab("recommend")}
+            className={`flex-1 rounded-xl py-2.5 text-sm font-bold transition-all ${
+              tab === "recommend"
+                ? "bg-brand-600 text-white shadow-sm"
+                : "bg-surface-muted text-gray-500 hover:text-gray-700 hover:bg-gray-200"
+            }`}
+          >
+            Coach me
+          </button>
+        )}
       </div>
 
       {tab === "log" && (
