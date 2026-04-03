@@ -34,12 +34,17 @@ export type WeightTrendPoint = {
   weightKg: number;
 };
 
-export function NutritionChart({ data, kcalTarget }: { data: TrendPoint[]; kcalTarget?: number }) {
+const tooltipStyle = {
+  contentStyle: { background: "#fff", border: "none", borderRadius: 12, boxShadow: "0 4px 12px rgba(0,0,0,0.08)" },
+  labelStyle: { color: "#6b7280", fontWeight: 600 },
+};
+
+export function CaloriesChart({ data, kcalTarget }: { data: TrendPoint[]; kcalTarget?: number }) {
   const formatted = data.map((d) => ({ ...d, date: d.date.slice(5) }));
 
   return (
-    <ResponsiveContainer width="100%" height={260}>
-      <ComposedChart data={formatted} margin={{ top: 5, right: 40, left: -10, bottom: 5 }}>
+    <ResponsiveContainer width="100%" height={180}>
+      <ComposedChart data={formatted} margin={{ top: 5, right: 10, left: -10, bottom: 0 }}>
         <defs>
           <linearGradient id="kcalGradient" x1="0" y1="0" x2="0" y2="1">
             <stop offset="5%" stopColor="#10b981" stopOpacity={0.2} />
@@ -47,18 +52,11 @@ export function NutritionChart({ data, kcalTarget }: { data: TrendPoint[]; kcalT
           </linearGradient>
         </defs>
         <XAxis dataKey="date" tick={{ fontSize: 11, fill: "#9ca3af" }} />
-        {/* Left axis — calories */}
-        <YAxis yAxisId="kcal" tick={{ fontSize: 11, fill: "#10b981" }} />
-        {/* Right axis — grams */}
-        <YAxis yAxisId="g" orientation="right" tick={{ fontSize: 11, fill: "#9ca3af" }} unit="g" />
-        <Tooltip
-          contentStyle={{ background: "#fff", border: "none", borderRadius: 12, boxShadow: "0 4px 12px rgba(0,0,0,0.08)" }}
-          labelStyle={{ color: "#6b7280", fontWeight: 600 }}
-        />
+        <YAxis tick={{ fontSize: 11, fill: "#9ca3af" }} />
+        <Tooltip {...tooltipStyle} />
         <Legend wrapperStyle={{ fontSize: 12 }} />
         {kcalTarget && (
           <ReferenceLine
-            yAxisId="kcal"
             y={kcalTarget}
             stroke="#10b981"
             strokeDasharray="5 3"
@@ -66,11 +64,37 @@ export function NutritionChart({ data, kcalTarget }: { data: TrendPoint[]; kcalT
             label={{ value: "target", position: "insideTopRight", fontSize: 10, fill: "#10b981" }}
           />
         )}
-        <Area yAxisId="kcal" type="monotone" dataKey="kcal" stroke="#10b981" fill="url(#kcalGradient)" strokeWidth={2.5} name="Calories" connectNulls={false} dot={false} />
-        <Line yAxisId="g" type="monotone" dataKey="protein_g" stroke="#3b82f6" dot={false} strokeWidth={2} name="Protein (g)" connectNulls={false} />
-        <Line yAxisId="g" type="monotone" dataKey="fiber_g" stroke="#f59e0b" dot={false} strokeWidth={2} name="Fiber (g)" connectNulls={false} />
+        <Area type="monotone" dataKey="kcal" stroke="#10b981" fill="url(#kcalGradient)" strokeWidth={2.5} name="Calories" connectNulls={false} dot={false} />
       </ComposedChart>
     </ResponsiveContainer>
+  );
+}
+
+export function MacrosChart({ data }: { data: TrendPoint[] }) {
+  const formatted = data.map((d) => ({ ...d, date: d.date.slice(5) }));
+
+  return (
+    <ResponsiveContainer width="100%" height={180}>
+      <ComposedChart data={formatted} margin={{ top: 5, right: 10, left: -10, bottom: 0 }}>
+        <XAxis dataKey="date" tick={{ fontSize: 11, fill: "#9ca3af" }} />
+        <YAxis tick={{ fontSize: 11, fill: "#9ca3af" }} unit="g" />
+        <Tooltip {...tooltipStyle} />
+        <Legend wrapperStyle={{ fontSize: 12 }} />
+        <Line type="monotone" dataKey="protein_g" stroke="#3b82f6" dot={false} strokeWidth={2} name="Protein (g)" connectNulls={false} />
+        <Line type="monotone" dataKey="fiber_g" stroke="#f59e0b" dot={false} strokeWidth={2} name="Fiber (g)" connectNulls={false} />
+      </ComposedChart>
+    </ResponsiveContainer>
+  );
+}
+
+export function NutritionChart({ data, kcalTarget }: { data: TrendPoint[]; kcalTarget?: number }) {
+  return (
+    <div className="space-y-2">
+      <div className="text-[11px] font-semibold uppercase tracking-wide text-gray-400 px-1">Calories</div>
+      <CaloriesChart data={data} kcalTarget={kcalTarget} />
+      <div className="text-[11px] font-semibold uppercase tracking-wide text-gray-400 px-1 pt-2">Protein & Fiber</div>
+      <MacrosChart data={data} />
+    </div>
   );
 }
 
