@@ -5,6 +5,7 @@ import { Nav } from "@/components/Nav";
 import { getSession } from "@/lib/auth-session";
 import { logoutAction } from "@/app/actions/auth";
 import { prisma } from "@/lib/db";
+import { ThemeDecor } from "@/components/ThemeDecor";
 
 const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
 
@@ -30,8 +31,9 @@ export default async function RootLayout({ children }: { children: React.ReactNo
     <html lang="en" className={inter.variable} data-theme={theme}>
       <body className="min-h-screen bg-surface text-gray-900 font-sans antialiased">
         {username && (
-          <header className="bg-white/80 backdrop-blur-md sticky top-0 z-10 border-b border-gray-100">
-            <div className="mx-auto max-w-3xl px-4 pt-3 pb-2 space-y-2">
+          <header className="bg-white/80 backdrop-blur-md sticky top-0 z-10 border-b border-gray-100 relative overflow-hidden">
+            <ThemeDecor theme={theme} />
+            <div className="mx-auto max-w-3xl px-4 pt-3 pb-2 space-y-2 relative z-10">
               <div className="flex items-center justify-between">
                 <div className="font-extrabold text-lg tracking-tight bg-gradient-to-r from-brand-600 to-brand-500 bg-clip-text text-transparent">NutriTracker</div>
                 <form action={logoutAction} className="shrink-0">

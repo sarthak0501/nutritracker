@@ -101,6 +101,38 @@ body {
   }
 }
 
+/* ── Theme background patterns ────────────────────────── */
+
+/* Puppy: tiling paw prints */
+[data-theme="puppy"] body {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='80' height='80' viewBox='0 0 80 80'%3E%3Cellipse cx='40' cy='54' rx='9' ry='8' fill='%23d97706' opacity='0.06'/%3E%3Ccircle cx='28' cy='38' r='4' fill='%23d97706' opacity='0.06'/%3E%3Ccircle cx='38' cy='32' r='4' fill='%23d97706' opacity='0.06'/%3E%3Ccircle cx='48' cy='32' r='4' fill='%23d97706' opacity='0.06'/%3E%3Ccircle cx='56' cy='38' r='3.5' fill='%23d97706' opacity='0.06'/%3E%3C/svg%3E");
+  background-size: 80px 80px;
+}
+
+/* Love: tiling hearts */
+[data-theme="love"] body {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='80' height='80' viewBox='0 0 80 80'%3E%3Cpath d='M40 64 C40 64 14 48 14 30 C14 21 21 15 29 15 C34 15 38 18 40 21 C42 18 46 15 51 15 C59 15 66 21 66 30 C66 48 40 64 40 64Z' fill='%23db2777' opacity='0.06'/%3E%3C/svg%3E");
+  background-size: 80px 80px;
+}
+
+/* Motivation: tiling lightning bolts */
+[data-theme="motivation"] body {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='80' height='80' viewBox='0 0 80 80'%3E%3Cpath d='M46 10 L26 46 L38 46 L34 70 L54 34 L42 34 Z' fill='%237c3aed' opacity='0.05'/%3E%3C/svg%3E");
+  background-size: 80px 80px;
+}
+
+/* Theme card top-accent stripe */
+[data-theme="puppy"] .card-themed::before,
+[data-theme="love"]  .card-themed::before,
+[data-theme="motivation"] .card-themed::before {
+  content: "";
+  display: block;
+  height: 3px;
+  border-radius: 4px 4px 0 0;
+  margin: -1rem -1rem 1rem -1rem;
+  background: linear-gradient(90deg, var(--brand-400), var(--brand-600));
+}
+
 /* Hide scrollbar on nav */
 .no-scrollbar::-webkit-scrollbar {
   display: none;
