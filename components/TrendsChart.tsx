@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import {
   ComposedChart,
   Line,
@@ -19,6 +20,8 @@ export type TrendPoint = {
   date: string;
   kcal: number | null;
   protein_g: number | null;
+  carbs_g: number | null;
+  fat_g: number | null;
   fiber_g: number | null;
 };
 
@@ -39,34 +42,88 @@ const tooltipStyle = {
   labelStyle: { color: "#6b7280", fontWeight: 600 },
 };
 
+type Metric = "kcal" | "protein_g" | "carbs_g" | "fat_g" | "fiber_g";
+
+const METRICS: { key: Metric; label: string; color: string }[] = [
+  { key: "kcal",      label: "Calories", color: "#10b981" },
+  { key: "protein_g", label: "Protein",  color: "#3b82f6" },
+  { key: "carbs_g",   label: "Carbs",    color: "#f59e0b" },
+  { key: "fat_g",     label: "Fat",      color: "#f43f5e" },
+  { key: "fiber_g",   label: "Fiber",    color: "#8b5cf6" },
+];
+
 export function NutritionChart({ data, kcalTarget }: { data: TrendPoint[]; kcalTarget?: number }) {
+  const [active, setActive] = useState<Set<Metric>>(new Set(["kcal", "protein_g"]));
   const formatted = data.map((d) => ({ ...d, date: d.date.slice(5) }));
 
+  const showKcal = active.has("kcal");
+  const showMacros = (["protein_g", "carbs_g", "fat_g", "fiber_g"] as Metric[]).some((k) => active.has(k));
+  const rightMargin = showMacros ? 40 : 10;
+
+  function toggle(key: Metric) {
+    setActive((prev) => {
+      const next = new Set(prev);
+      if (next.has(key) && next.size === 1) return prev; // keep at least one
+      next.has(key) ? next.delete(key) : next.add(key);
+      return next;
+    });
+  }
+
   return (
-    <ResponsiveContainer width="100%" height={260}>
-      <ComposedChart data={formatted} margin={{ top: 5, right: 40, left: -10, bottom: 5 }}>
-        <XAxis dataKey="date" tick={{ fontSize: 11, fill: "#9ca3af" }} />
-        {/* Left axis — calories */}
-        <YAxis yAxisId="kcal" tick={{ fontSize: 11, fill: "#9ca3af" }} />
-        {/* Right axis — grams */}
-        <YAxis yAxisId="g" orientation="right" tick={{ fontSize: 11, fill: "#9ca3af" }} unit="g" />
-        <Tooltip {...tooltipStyle} />
-        <Legend wrapperStyle={{ fontSize: 12 }} />
-        {kcalTarget && (
-          <ReferenceLine
-            yAxisId="kcal"
-            y={kcalTarget}
-            stroke="#10b981"
-            strokeDasharray="5 3"
-            strokeOpacity={0.5}
-            label={{ value: "target", position: "insideTopRight", fontSize: 10, fill: "#10b981" }}
-          />
-        )}
-        <Bar yAxisId="kcal" dataKey="kcal" fill="#10b981" fillOpacity={0.7} radius={[4, 4, 0, 0]} name="Calories" />
-        <Line yAxisId="g" type="monotone" dataKey="protein_g" stroke="#3b82f6" dot={false} strokeWidth={2} name="Protein (g)" connectNulls={false} />
-        <Line yAxisId="g" type="monotone" dataKey="fiber_g" stroke="#f59e0b" dot={false} strokeWidth={2} name="Fiber (g)" connectNulls={false} />
-      </ComposedChart>
-    </ResponsiveContainer>
+    <div>
+      {/* Toggle chips */}
+      <div className="flex flex-wrap gap-2 mb-4">
+        {METRICS.map(({ key, label, color }) => {
+          const on = active.has(key);
+          return (
+            <button
+              key={key}
+              onClick={() => toggle(key)}
+              className={`rounded-full px-3 py-1 text-xs font-semibold transition-all border ${
+                on ? "text-white border-transparent" : "bg-white text-gray-400 border-gray-200 hover:border-gray-300"
+              }`}
+              style={on ? { backgroundColor: color, borderColor: color } : {}}
+            >
+              {label}
+            </button>
+          );
+        })}
+      </div>
+
+      <ResponsiveContainer width="100%" height={260}>
+        <ComposedChart data={formatted} margin={{ top: 5, right: rightMargin, left: -10, bottom: 5 }}>
+          <XAxis dataKey="date" tick={{ fontSize: 11, fill: "#9ca3af" }} />
+          {showKcal && <YAxis yAxisId="kcal" tick={{ fontSize: 11, fill: "#9ca3af" }} />}
+          {showMacros && <YAxis yAxisId="g" orientation={showKcal ? "right" : "left"} tick={{ fontSize: 11, fill: "#9ca3af" }} unit="g" />}
+          <Tooltip {...tooltipStyle} />
+          {showKcal && kcalTarget && (
+            <ReferenceLine
+              yAxisId="kcal"
+              y={kcalTarget}
+              stroke="#10b981"
+              strokeDasharray="5 3"
+              strokeOpacity={0.5}
+              label={{ value: "target", position: "insideTopRight", fontSize: 10, fill: "#10b981" }}
+            />
+          )}
+          {showKcal && (
+            <Bar yAxisId="kcal" dataKey="kcal" fill="#10b981" fillOpacity={0.7} radius={[4, 4, 0, 0]} name="Calories" />
+          )}
+          {active.has("protein_g") && (
+            <Line yAxisId="g" type="monotone" dataKey="protein_g" stroke="#3b82f6" dot={false} strokeWidth={2} name="Protein (g)" connectNulls={false} />
+          )}
+          {active.has("carbs_g") && (
+            <Line yAxisId="g" type="monotone" dataKey="carbs_g" stroke="#f59e0b" dot={false} strokeWidth={2} name="Carbs (g)" connectNulls={false} />
+          )}
+          {active.has("fat_g") && (
+            <Line yAxisId="g" type="monotone" dataKey="fat_g" stroke="#f43f5e" dot={false} strokeWidth={2} name="Fat (g)" connectNulls={false} />
+          )}
+          {active.has("fiber_g") && (
+            <Line yAxisId="g" type="monotone" dataKey="fiber_g" stroke="#8b5cf6" dot={false} strokeWidth={2} name="Fiber (g)" connectNulls={false} />
+          )}
+        </ComposedChart>
+      </ResponsiveContainer>
+    </div>
   );
 }
 

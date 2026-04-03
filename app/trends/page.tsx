@@ -65,11 +65,13 @@ export default async function TrendsPage({
 
   const nutritionData: TrendPoint[] = days.map((d) => {
     const t = totalsByDate.get(d);
-    if (!t) return { date: d, kcal: null, protein_g: null, fiber_g: null };
+    if (!t) return { date: d, kcal: null, protein_g: null, carbs_g: null, fat_g: null, fiber_g: null };
     return {
       date: d,
       kcal: Math.round(t.kcal),
       protein_g: toFixed1(t.protein_g),
+      carbs_g: toFixed1(t.carbs_g),
+      fat_g: toFixed1(t.fat_g),
       fiber_g: toFixed1(t.fiber_g ?? 0),
     };
   });
