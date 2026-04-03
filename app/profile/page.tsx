@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db";
 import { updateProfile, updateBodyStats, updateHealthProfile } from "@/app/actions/profile";
 import { requireSession } from "@/lib/session";
 import { ChipSelector } from "@/components/ChipSelector";
+import { ProfileSaveForm } from "@/components/ProfileSaveForm";
 
 export default async function ProfilePage() {
   const user = await requireSession();
@@ -23,7 +24,7 @@ export default async function ProfilePage() {
       </div>
 
       <Card title="Body Stats">
-        <form action={updateBodyStats} className="grid gap-4">
+        <ProfileSaveForm action={updateBodyStats} submitLabel="Save body stats">
           <div className="grid grid-cols-2 gap-3">
             <label className="grid gap-1 text-sm">
               <span className={labelClass}>Height (cm)</span>
@@ -68,15 +69,11 @@ export default async function ProfilePage() {
               placeholder="dumbbells, pull-up bar, resistance bands"
               className={inputClass} />
           </label>
-
-          <button type="submit" className="rounded-xl bg-brand-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-brand-700 active:scale-[0.98] transition-all">
-            Save body stats
-          </button>
-        </form>
+        </ProfileSaveForm>
       </Card>
 
       <Card title="Your Nutrition Goals">
-        <form action={updateProfile} className="grid gap-4">
+        <ProfileSaveForm action={updateProfile} submitLabel="Save goals">
           <label className="grid gap-1 text-sm">
             <span className={labelClass}>Calories (kcal)</span>
             <input name="kcalTarget" type="number" step="1" defaultValue={Math.round(profile?.kcalTarget ?? 2000)}
@@ -104,14 +101,11 @@ export default async function ProfilePage() {
                 className={inputClass} />
             </label>
           </div>
-          <button type="submit" className="rounded-xl bg-brand-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-brand-700 active:scale-[0.98] transition-all">
-            Save goals
-          </button>
-        </form>
+        </ProfileSaveForm>
       </Card>
 
       <Card title="Health & Dietary Profile">
-        <form action={updateHealthProfile} className="grid gap-5">
+        <ProfileSaveForm action={updateHealthProfile} submitLabel="Save health profile">
           <div className="space-y-2">
             <span className={labelClass}>Allergies</span>
             <ChipSelector
@@ -158,11 +152,7 @@ export default async function ProfilePage() {
           </div>
 
           <p className="text-xs text-gray-400">This information personalises your meal recommendations.</p>
-
-          <button type="submit" className="rounded-xl bg-brand-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-brand-700 active:scale-[0.98] transition-all">
-            Save health profile
-          </button>
-        </form>
+        </ProfileSaveForm>
       </Card>
     </div>
   );
