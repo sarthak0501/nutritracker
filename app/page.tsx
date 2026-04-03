@@ -14,6 +14,7 @@ import { FrequentMeals } from "@/components/FrequentMeals";
 import { MealSuggestion } from "@/components/MealSuggestion";
 import { getTodayDashboardData, emptyTotals } from "@/lib/dashboard";
 import { redirect } from "next/navigation";
+import { LoveMessage } from "@/components/LoveMessage";
 
 export default async function TodayPage() {
   const user = await requireSession();
@@ -46,6 +47,7 @@ export default async function TodayPage() {
 
   return (
     <div className="space-y-4">
+      {user.username === "kavya" && <LoveMessage />}
       {/* 1. PRIMARY: AI Composer — the hero */}
       <Card variant="action">
         <div className="mb-1 text-lg font-bold text-gray-900">What did you eat today?</div>
