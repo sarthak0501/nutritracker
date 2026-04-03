@@ -66,6 +66,7 @@ export default async function BuddyPage() {
             buddyName={buddy.username}
             currentWeek={challengeData.currentWeek}
             pastWeeks={challengeData.pastWeeks}
+            allTime={challengeData.allTime}
             todayIso={today}
           />
         </Card>
@@ -74,11 +75,11 @@ export default async function BuddyPage() {
       {/* Accepted buddies */}
       <Card variant="social" title="Your buddies">
         {accepted.length === 0 ? (
-          <div className="text-center py-6">
-            <div className="text-3xl mb-2">👥</div>
-            <div className="text-sm font-medium text-gray-500">No buddies yet</div>
-            <div className="text-xs text-gray-400 mt-1">
-              Add a friend below to see each other's meals and cheer each other on
+          <div className="text-center py-8">
+            <div className="text-4xl mb-3">👥</div>
+            <div className="text-sm font-bold text-gray-600">No buddies yet</div>
+            <div className="text-xs text-gray-400 mt-1 max-w-xs mx-auto">
+              Add a friend to see each other's meals, react to their logs, and compete in weekly challenges
             </div>
           </div>
         ) : (

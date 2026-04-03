@@ -115,12 +115,21 @@ function scoreDays(
   });
 }
 
+export type AllTimeStats = {
+  myWins: number;
+  buddyWins: number;
+  ties: number;
+  myTotalPoints: number;
+  buddyTotalPoints: number;
+};
+
 export async function getChallengeData(
   userId: string,
   buddyId: string
-): Promise<{ currentWeek: WeekResult; pastWeeks: WeekResult[] }> {
+): Promise<{ currentWeek: WeekResult; pastWeeks: WeekResult[]; allTime: AllTimeStats }> {
   const thisMonday = currentWeekMonday();
-  const pastMondays = [1, 2, 3, 4].map(mondayNWeeksAgo);
+  const HISTORY_WEEKS = 12;
+  const pastMondays = Array.from({ length: HISTORY_WEEKS }, (_, i) => mondayNWeeksAgo(i + 1));
   const allMondays = [thisMonday, ...pastMondays];
 
   const rangeStart = pastMondays[pastMondays.length - 1];
@@ -173,5 +182,20 @@ export async function getChallengeData(
   }
 
   const [currentWeek, ...pastWeeksReversed] = allMondays.map(buildWeek);
-  return { currentWeek, pastWeeks: pastWeeksReversed.reverse() };
+  const pastWeeks = pastWeeksReversed.reverse();
+
+  const allTime: AllTimeStats = pastWeeks.reduce(
+    (acc, w) => {
+      if (w.myTotal === 0 && w.buddyTotal === 0) return acc; // skip empty weeks
+      acc.myTotalPoints += w.myTotal;
+      acc.buddyTotalPoints += w.buddyTotal;
+      if (w.winner === "me") acc.myWins++;
+      else if (w.winner === "buddy") acc.buddyWins++;
+      else acc.ties++;
+      return acc;
+    },
+    { myWins: 0, buddyWins: 0, ties: 0, myTotalPoints: 0, buddyTotalPoints: 0 }
+  );
+
+  return { currentWeek, pastWeeks, allTime };
 }

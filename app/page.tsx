@@ -15,6 +15,7 @@ import { MealSuggestion } from "@/components/MealSuggestion";
 import { getTodayDashboardData, emptyTotals } from "@/lib/dashboard";
 import { redirect } from "next/navigation";
 import { LoveMessage } from "@/components/LoveMessage";
+import { NutritionAlerts } from "@/components/NutritionAlerts";
 
 export default async function TodayPage() {
   const user = await requireSession();
@@ -201,11 +202,23 @@ export default async function TodayPage() {
       )}
 
       {entries.length === 0 && (
-        <div className="text-center py-8">
-          <div className="text-3xl mb-2">🍽️</div>
-          <div className="text-sm font-medium text-gray-500">No meals logged yet today</div>
-          <div className="text-xs text-gray-400 mt-1">Use the composer above to get started</div>
+        <div className="rounded-2xl border-2 border-dashed border-gray-200 py-10 text-center">
+          <div className="text-4xl mb-3">🍽️</div>
+          <div className="text-sm font-bold text-gray-600">Nothing logged yet today</div>
+          <div className="text-xs text-gray-400 mt-1 max-w-xs mx-auto">
+            Describe what you ate above — even a rough description works!
+          </div>
         </div>
+      )}
+
+      {/* Nutrition alerts — week-level patterns */}
+      {profile && (
+        <NutritionAlerts
+          userId={user.id}
+          kcalTarget={profile.kcalTarget}
+          proteinTarget={profile.proteinTarget}
+          fiberTarget={profile.fiberTarget ?? 30}
+        />
       )}
 
       {/* Buddy feed — social section */}

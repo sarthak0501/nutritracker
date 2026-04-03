@@ -24,6 +24,18 @@ export async function getBuddyEntriesForDate(buddyId: string, date: string) {
   });
 }
 
+export async function getBuddyWorkoutsForDate(buddyId: string, date: string) {
+  return prisma.workoutEntry.findMany({
+    where: { userId: buddyId, date },
+    include: {
+      workoutReactions: {
+        include: { user: { select: { id: true, username: true } } },
+      },
+    },
+    orderBy: { createdAt: "asc" },
+  });
+}
+
 export async function getBuddyInfo(buddyId: string) {
   return prisma.user.findUnique({
     where: { id: buddyId },

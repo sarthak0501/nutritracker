@@ -56,7 +56,8 @@ model User {
   buddyRequestsSent     BuddyRelationship[] @relation("Requester")
   buddyRequestsReceived BuddyRelationship[] @relation("Addressee")
 
-  reactionsGiven Reaction[]
+  reactionsGiven         Reaction[]
+  workoutReactionsGiven  WorkoutReaction[]
 
   @@index([username])
 }
@@ -234,9 +235,27 @@ model WorkoutEntry {
   sourceText      String?
   estimationMeta  Json?
 
+  workoutReactions WorkoutReaction[]
+
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
   @@index([date])
   @@index([userId, date])
+}
+
+model WorkoutReaction {
+  id             String       @id @default(cuid())
+  workoutEntryId String
+  userId         String
+  type           ReactionType
+
+  workoutEntry   WorkoutEntry @relation(fields: [workoutEntryId], references: [id], onDelete: Cascade)
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt      DateTime     @default(now())
+
+  @@unique([workoutEntryId, userId, type])
+  @@index([workoutEntryId])
+  @@index([userId])
 }

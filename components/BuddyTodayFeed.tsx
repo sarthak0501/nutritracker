@@ -1,6 +1,7 @@
-import { getBuddyId, getBuddyEntriesForDate, getBuddyInfo } from "@/lib/buddy";
+import { getBuddyId, getBuddyEntriesForDate, getBuddyWorkoutsForDate, getBuddyInfo } from "@/lib/buddy";
 import { Card } from "@/components/Card";
 import { ReactionBar } from "@/components/ReactionBar";
+import { WorkoutReactionBar } from "@/components/WorkoutReactionBar";
 import { addNutrients, round0, round1, safeNutrientsForEntry, type Nutrients } from "@/lib/nutrition";
 
 function emptyTotals(): Nutrients {
@@ -48,9 +49,10 @@ export async function BuddyTodayFeed({
     );
   }
 
-  const [buddy, entries] = await Promise.all([
+  const [buddy, entries, workouts] = await Promise.all([
     getBuddyInfo(buddyId),
     getBuddyEntriesForDate(buddyId, date),
+    getBuddyWorkoutsForDate(buddyId, date),
   ]);
 
   const buddyName = buddy?.username ?? "Buddy";
@@ -84,9 +86,11 @@ export async function BuddyTodayFeed({
           </div>
         </div>
 
-        {entries.length === 0 ? (
-          <div className="mt-3 text-center py-2">
-            <div className="text-xs text-gray-400">Send them some encouragement when they log!</div>
+        {entries.length === 0 && workouts.length === 0 ? (
+          <div className="mt-3 rounded-xl bg-white/60 py-4 text-center">
+            <div className="text-2xl mb-1">⏳</div>
+            <div className="text-xs font-medium text-gray-500">{buddyName} hasn't logged anything yet today</div>
+            <div className="text-[11px] text-gray-400 mt-0.5">Check back later — or give them a nudge!</div>
           </div>
         ) : (
           <div className="mt-3 grid grid-cols-3 gap-2 sm:grid-cols-5">
@@ -105,6 +109,35 @@ export async function BuddyTodayFeed({
           </div>
         )}
       </Card>
+
+      {workouts.length > 0 && (
+        <Card>
+          <div className="flex items-center justify-between mb-3">
+            <span className="text-sm font-bold text-gray-800">💪 {buddyName}'s workouts</span>
+            <span className="text-sm font-semibold tabular-nums text-blue-600">
+              {round0(workouts.reduce((s, w) => s + w.caloriesBurned, 0))} kcal
+            </span>
+          </div>
+          <div className="space-y-2">
+            {workouts.map((w) => (
+              <div key={w.id} className="rounded-xl bg-surface-muted p-3">
+                <div className="text-sm font-semibold text-gray-800">{w.exerciseName}</div>
+                <div className="text-xs text-gray-500 mt-0.5">
+                  {w.muscleGroup && <span className="capitalize">{w.muscleGroup} · </span>}
+                  {w.durationMinutes && <span>{w.durationMinutes} min · </span>}
+                  {w.sets && w.reps && <span>{w.sets}×{w.reps} · </span>}
+                  ~{round0(w.caloriesBurned)} kcal
+                </div>
+                <WorkoutReactionBar
+                  workoutEntryId={w.id}
+                  currentUserId={currentUserId}
+                  reactions={w.workoutReactions as Parameters<typeof WorkoutReactionBar>[0]["reactions"]}
+                />
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
 
       {entries.length > 0 && Array.from(byMeal.entries()).map(([mealKey, mealEntries]) => {
         const mealTotals = mealEntries.reduce((acc, e) => {

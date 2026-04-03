@@ -263,10 +263,16 @@ export default async function HistoryPage({
       )}
 
       {!hasData && (
-        <div className="text-center py-8">
-          <div className="text-3xl mb-2">📅</div>
-          <div className="text-sm font-medium text-gray-500">Nothing logged for this day</div>
-          <div className="text-xs text-gray-400 mt-1">Use the forms above to add meals or workouts</div>
+        <div className="rounded-2xl border-2 border-dashed border-gray-200 py-10 text-center">
+          <div className="text-4xl mb-3">{isToday ? "🍽️" : "📅"}</div>
+          <div className="text-sm font-bold text-gray-600">
+            {isToday ? "Nothing logged yet today" : "Rest day"}
+          </div>
+          <div className="text-xs text-gray-400 mt-1">
+            {isToday
+              ? "Use the forms above to log a meal or workout"
+              : "No meals or workouts were logged on this day"}
+          </div>
         </div>
       )}
     </div>

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import type { DayScore, WeekResult } from "@/lib/challenge";
+import type { DayScore, WeekResult, AllTimeStats } from "@/lib/challenge";
 import { MAX_PER_WEEK } from "@/lib/challenge";
 
 const DAY_LETTER = ["M", "T", "W", "T", "F", "S", "S"];
@@ -11,10 +11,11 @@ type Props = {
   buddyName: string;
   currentWeek: WeekResult;
   pastWeeks: WeekResult[];
+  allTime: AllTimeStats;
   todayIso: string;
 };
 
-export function WeeklyChallenge({ myName, buddyName, currentWeek, pastWeeks, todayIso }: Props) {
+export function WeeklyChallenge({ myName, buddyName, currentWeek, pastWeeks, allTime, todayIso }: Props) {
   const [animated, setAnimated] = useState(false);
 
   useEffect(() => {
@@ -221,24 +222,69 @@ export function WeeklyChallenge({ myName, buddyName, currentWeek, pastWeeks, tod
         </div>
       </div>
 
-      {/* All-time record */}
-      {pastWeeks.length > 0 && (myWins > 0 || buddyWins > 0) && (
-        <div className="flex items-center justify-between rounded-xl border border-gray-100 bg-white/70 px-4 py-3">
-          <div className="text-xs font-semibold text-gray-500">
-            Last {pastWeeks.length} week{pastWeeks.length > 1 ? "s" : ""}
+      {/* All-time leaderboard */}
+      {(allTime.myWins > 0 || allTime.buddyWins > 0 || allTime.ties > 0) && (
+        <div className="rounded-xl border border-gray-100 bg-white/70 overflow-hidden">
+          <div className="px-4 py-2 border-b border-gray-100">
+            <div className="text-[11px] font-bold uppercase tracking-wide text-gray-400">All-time leaderboard</div>
           </div>
-          <div className="flex items-center gap-3">
-            <div className="text-center">
-              <div className="text-xl font-black text-green-600">{myWins}</div>
-              <div className="text-[10px] text-gray-400">{myName}</div>
+          <div className="grid grid-cols-3 divide-x divide-gray-100">
+            {/* Wins */}
+            <div className="px-3 py-3 text-center">
+              <div className="text-[10px] font-semibold uppercase tracking-wide text-gray-400 mb-2">Wins</div>
+              <div className="flex items-end justify-center gap-2">
+                <div className="text-center">
+                  <div className="text-2xl font-black text-green-600">{allTime.myWins}</div>
+                  <div className="text-[9px] text-gray-400 mt-0.5">{myName}</div>
+                </div>
+                <div className="text-xs text-gray-300 pb-1">vs</div>
+                <div className="text-center">
+                  <div className="text-2xl font-black text-purple-500">{allTime.buddyWins}</div>
+                  <div className="text-[9px] text-gray-400 mt-0.5">{buddyName}</div>
+                </div>
+              </div>
+              {allTime.ties > 0 && (
+                <div className="text-[10px] text-gray-400 mt-1">{allTime.ties} tied</div>
+              )}
             </div>
-            <div className="text-sm font-light text-gray-300">vs</div>
-            <div className="text-center">
-              <div className="text-xl font-black text-purple-500">{buddyWins}</div>
-              <div className="text-[10px] text-gray-400">{buddyName}</div>
+            {/* Total points */}
+            <div className="px-3 py-3 text-center">
+              <div className="text-[10px] font-semibold uppercase tracking-wide text-gray-400 mb-2">Points</div>
+              <div className="flex items-end justify-center gap-2">
+                <div className="text-center">
+                  <div className="text-2xl font-black text-green-600">{allTime.myTotalPoints}</div>
+                  <div className="text-[9px] text-gray-400 mt-0.5">{myName}</div>
+                </div>
+                <div className="text-xs text-gray-300 pb-1">vs</div>
+                <div className="text-center">
+                  <div className="text-2xl font-black text-purple-500">{allTime.buddyTotalPoints}</div>
+                  <div className="text-[9px] text-gray-400 mt-0.5">{buddyName}</div>
+                </div>
+              </div>
+            </div>
+            {/* Win rate */}
+            <div className="px-3 py-3 text-center">
+              <div className="text-[10px] font-semibold uppercase tracking-wide text-gray-400 mb-2">Win rate</div>
+              {(() => {
+                const total = allTime.myWins + allTime.buddyWins + allTime.ties;
+                const myRate = total > 0 ? Math.round((allTime.myWins / total) * 100) : 0;
+                const buddyRate = total > 0 ? Math.round((allTime.buddyWins / total) * 100) : 0;
+                return (
+                  <div className="flex items-end justify-center gap-2">
+                    <div className="text-center">
+                      <div className="text-2xl font-black text-green-600">{myRate}%</div>
+                      <div className="text-[9px] text-gray-400 mt-0.5">{myName}</div>
+                    </div>
+                    <div className="text-xs text-gray-300 pb-1">vs</div>
+                    <div className="text-center">
+                      <div className="text-2xl font-black text-purple-500">{buddyRate}%</div>
+                      <div className="text-[9px] text-gray-400 mt-0.5">{buddyName}</div>
+                    </div>
+                  </div>
+                );
+              })()}
             </div>
           </div>
-          <div className="text-xs text-gray-400">Wins</div>
         </div>
       )}
     </div>
