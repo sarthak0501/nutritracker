@@ -135,18 +135,6 @@ const BodyStatsSchema = z.object({
   equipment: z.array(z.string()).default([]),
 });
 
-export async function updateTheme(theme: string) {
-  const user = await requireSession();
-  const valid = ["light", "puppy", "love", "motivation"];
-  if (!valid.includes(theme)) return;
-  await prisma.profile.upsert({
-    where: { userId: user.id },
-    update: { theme },
-    create: { userId: user.id, theme },
-  });
-  revalidatePath("/", "layout");
-}
-
 export async function updateBodyStats(formData: FormData) {
   const user = await requireSession();
 
