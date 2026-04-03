@@ -4,6 +4,7 @@ import "./globals.css";
 import { Nav } from "@/components/Nav";
 import { getSession } from "@/lib/auth-session";
 import { logoutAction } from "@/app/actions/auth";
+import { prisma } from "@/lib/db";
 
 const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
 
@@ -21,9 +22,12 @@ export const viewport: Viewport = {
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
   const session = await getSession();
   const username = session?.username ?? null;
+  const theme = session
+    ? ((await prisma.profile.findUnique({ where: { userId: session.id }, select: { theme: true } }))?.theme ?? "light")
+    : "light";
 
   return (
-    <html lang="en" className={inter.variable}>
+    <html lang="en" className={inter.variable} data-theme={theme}>
       <body className="min-h-screen bg-surface text-gray-900 font-sans antialiased">
         {username && (
           <header className="bg-white/80 backdrop-blur-md sticky top-0 z-10 border-b border-gray-100">

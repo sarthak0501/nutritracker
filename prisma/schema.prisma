@@ -83,6 +83,7 @@ model Profile {
   dietaryRestrictions  String[] @default([])
   healthConditions     String[] @default([])
   onboardingCompleted  Boolean  @default(false)
+  theme                String   @default("light")
 
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt

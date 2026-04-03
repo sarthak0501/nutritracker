@@ -4,6 +4,7 @@ import { updateProfile, updateBodyStats, updateHealthProfile } from "@/app/actio
 import { requireSession } from "@/lib/session";
 import { ChipSelector } from "@/components/ChipSelector";
 import { ProfileSaveForm } from "@/components/ProfileSaveForm";
+import { ThemePicker } from "@/components/ThemePicker";
 
 export default async function ProfilePage() {
   const user = await requireSession();
@@ -22,6 +23,10 @@ export default async function ProfilePage() {
         <h1 className="text-xl font-bold">Your Profile</h1>
         <p className="text-sm text-gray-500 mt-1">Signed in as <span className="text-gray-800 font-semibold">{user.name}</span></p>
       </div>
+
+      <Card title="Theme">
+        <ThemePicker current={profile?.theme ?? "light"} />
+      </Card>
 
       <Card title="Body Stats">
         <ProfileSaveForm action={updateBodyStats} submitLabel="Save body stats">

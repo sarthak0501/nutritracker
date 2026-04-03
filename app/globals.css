@@ -2,6 +2,83 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ── Light (default) ──────────────────────────────────── */
+:root,
+[data-theme="light"] {
+  --brand-50:  #f0fdf4;
+  --brand-100: #dcfce7;
+  --brand-200: #bbf7d0;
+  --brand-300: #86efac;
+  --brand-400: #4ade80;
+  --brand-500: #22c55e;
+  --brand-600: #16a34a;
+  --brand-700: #15803d;
+  --brand-800: #166534;
+  --brand-900: #14532d;
+  --surface:       #fafaf8;
+  --surface-card:  #ffffff;
+  --surface-muted: #f5f5f0;
+  --selection-bg:  #dcfce7;
+  --selection-fg:  #166534;
+}
+
+/* ── Puppy 🐾 ─────────────────────────────────────────── */
+[data-theme="puppy"] {
+  --brand-50:  #fffbeb;
+  --brand-100: #fef3c7;
+  --brand-200: #fde68a;
+  --brand-300: #fcd34d;
+  --brand-400: #fbbf24;
+  --brand-500: #f59e0b;
+  --brand-600: #d97706;
+  --brand-700: #b45309;
+  --brand-800: #92400e;
+  --brand-900: #78350f;
+  --surface:       #fffdf7;
+  --surface-card:  #ffffff;
+  --surface-muted: #fef9ee;
+  --selection-bg:  #fde68a;
+  --selection-fg:  #92400e;
+}
+
+/* ── Love 💕 ──────────────────────────────────────────── */
+[data-theme="love"] {
+  --brand-50:  #fdf2f8;
+  --brand-100: #fce7f3;
+  --brand-200: #fbcfe8;
+  --brand-300: #f9a8d4;
+  --brand-400: #f472b6;
+  --brand-500: #ec4899;
+  --brand-600: #db2777;
+  --brand-700: #be185d;
+  --brand-800: #9d174d;
+  --brand-900: #831843;
+  --surface:       #fff5f9;
+  --surface-card:  #ffffff;
+  --surface-muted: #fdf2f8;
+  --selection-bg:  #fbcfe8;
+  --selection-fg:  #9d174d;
+}
+
+/* ── Motivation 💪 ────────────────────────────────────── */
+[data-theme="motivation"] {
+  --brand-50:  #f5f3ff;
+  --brand-100: #ede9fe;
+  --brand-200: #ddd6fe;
+  --brand-300: #c4b5fd;
+  --brand-400: #a78bfa;
+  --brand-500: #8b5cf6;
+  --brand-600: #7c3aed;
+  --brand-700: #6d28d9;
+  --brand-800: #5b21b6;
+  --brand-900: #4c1d95;
+  --surface:       #fafafe;
+  --surface-card:  #ffffff;
+  --surface-muted: #f5f3ff;
+  --selection-bg:  #ddd6fe;
+  --selection-fg:  #5b21b6;
+}
+
 html {
   scroll-behavior: smooth;
   -webkit-tap-highlight-color: transparent;
@@ -15,12 +92,12 @@ body {
 @layer base {
   body {
     font-feature-settings: "cv02", "cv03", "cv04", "cv11";
-    background-color: #fafaf8;
+    background-color: var(--surface);
   }
 
   ::selection {
-    background-color: #dcfce7;
-    color: #166534;
+    background-color: var(--selection-bg);
+    color: var(--selection-fg);
   }
 }
 
