@@ -7,6 +7,7 @@ import { MealType, AmountUnit } from "@prisma/client";
 import { requireSession } from "@/lib/session";
 import type { EstimateResponse } from "@/lib/llm";
 import { todayIsoDate, isoDaysBack } from "@/lib/dates";
+import { getBuddyId } from "@/lib/buddy";
 
 function parseNumber(v: FormDataEntryValue | null): number | null {
   if (!v) return null;
@@ -367,6 +368,110 @@ export async function quickLogFood(input: {
       foodId: input.foodId,
     },
   });
+
+  revalidatePath("/");
+  revalidatePath("/history");
+}
+
+export async function copyMealsToBuddy(input: {
+  date: string;
+  mealType?: string;
+}) {
+  const user = await requireSession();
+  const buddyId = await getBuddyId(user.id);
+  if (!buddyId) throw new Error("No buddy connected");
+
+  const entries = await prisma.logEntry.findMany({
+    where: {
+      userId: user.id,
+      date: input.date,
+      ...(input.mealType ? { mealType: input.mealType as MealType } : {}),
+    },
+  });
+
+  if (entries.length === 0) return;
+
+  for (const e of entries) {
+    await prisma.logEntry.create({
+      data: {
+        userId: buddyId,
+        date: e.date,
+        mealType: e.mealType,
+        mealName: e.mealName ?? undefined,
+        amount: e.amount,
+        unit: e.unit,
+        foodId: e.foodId,
+        isEstimated: e.isEstimated,
+        sourceText: e.sourceText ?? undefined,
+        snapshotKcal: e.snapshotKcal ?? undefined,
+        snapshotProteinG: e.snapshotProteinG ?? undefined,
+        snapshotCarbsG: e.snapshotCarbsG ?? undefined,
+        snapshotFatG: e.snapshotFatG ?? undefined,
+        snapshotFiberG: e.snapshotFiberG ?? undefined,
+      },
+    });
+  }
+
+  revalidatePath("/");
+  revalidatePath("/history");
+}
+
+export async function applyEstimatedMealForBuddy(input: {
+  date: string;
+  mealType: string;
+  mealName?: string;
+  estimate: EstimateResponse;
+  sourceText: string;
+}) {
+  const user = await requireSession();
+  const buddyId = await getBuddyId(user.id);
+  if (!buddyId) throw new Error("No buddy connected");
+
+  const mealType = input.mealType as MealType;
+
+  for (const item of input.estimate.items) {
+    const per100 = item.quantity > 0 ? 100 / item.quantity : 1;
+
+    const food = await prisma.food.create({
+      data: {
+        name: item.description,
+        source: "LLM",
+        createdByUserId: user.id,
+        kcalPer100g: item.nutrients.kcal * per100,
+        proteinPer100g: item.nutrients.protein_g * per100,
+        carbsPer100g: item.nutrients.carbs_g * per100,
+        fatPer100g: item.nutrients.fat_g * per100,
+        fiberPer100g: item.nutrients.fiber_g != null ? item.nutrients.fiber_g * per100 : undefined,
+        sodiumMgPer100g: item.nutrients.sodium_mg != null ? item.nutrients.sodium_mg * per100 : undefined,
+      },
+    });
+
+    await prisma.logEntry.create({
+      data: {
+        userId: buddyId,
+        date: input.date,
+        mealType,
+        mealName: input.mealName,
+        amount: item.quantity,
+        unit: "GRAM",
+        foodId: food.id,
+        isEstimated: true,
+        sourceText: input.sourceText,
+        estimationMeta: {
+          confidence: item.confidence,
+          assumptions: item.assumptions,
+          originalQuantity: item.quantity,
+          originalUnit: item.unit,
+          loggedBy: user.id,
+        },
+        snapshotKcal: item.nutrients.kcal,
+        snapshotProteinG: item.nutrients.protein_g,
+        snapshotCarbsG: item.nutrients.carbs_g,
+        snapshotFatG: item.nutrients.fat_g,
+        snapshotFiberG: item.nutrients.fiber_g ?? undefined,
+      },
+    });
+  }
 
   revalidatePath("/");
   revalidatePath("/history");

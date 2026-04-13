@@ -3,6 +3,9 @@ import { Card } from "@/components/Card";
 import { ReactionBar } from "@/components/ReactionBar";
 import { WorkoutReactionBar } from "@/components/WorkoutReactionBar";
 import { addNutrients, round0, round1, safeNutrientsForEntry, type Nutrients } from "@/lib/nutrition";
+import { type MealType } from "@prisma/client";
+import { LogForBuddy, type UserMealSummary } from "@/components/LogForBuddy";
+import { prisma } from "@/lib/db";
 
 function emptyTotals(): Nutrients {
   return { kcal: 0, protein_g: 0, carbs_g: 0, fat_g: 0, fiber_g: 0, sodium_mg: 0 };
@@ -14,6 +17,14 @@ const MEAL_LABELS: Record<string, string> = {
   DINNER: "🌙 Dinner",
   SNACK: "🍎 Snacks",
   CUSTOM: "✨ Custom",
+};
+
+const MEAL_META: Record<string, { label: string; icon: string }> = {
+  BREAKFAST: { label: "Breakfast", icon: "🌅" },
+  LUNCH: { label: "Lunch", icon: "☀️" },
+  DINNER: { label: "Dinner", icon: "🌙" },
+  SNACK: { label: "Snacks", icon: "🍎" },
+  CUSTOM: { label: "Custom", icon: "✨" },
 };
 
 function AvatarBadge({ name }: { name: string }) {
@@ -49,10 +60,14 @@ export async function BuddyTodayFeed({
     );
   }
 
-  const [buddy, entries, workouts] = await Promise.all([
+  const [buddy, entries, workouts, userEntries] = await Promise.all([
     getBuddyInfo(buddyId),
     getBuddyEntriesForDate(buddyId, date),
     getBuddyWorkoutsForDate(buddyId, date),
+    prisma.logEntry.findMany({
+      where: { userId: currentUserId, date },
+      include: { food: true },
+    }),
   ]);
 
   const buddyName = buddy?.username ?? "Buddy";
@@ -68,6 +83,26 @@ export async function BuddyTodayFeed({
     arr.push(e);
     byMeal.set(e.mealType, arr);
   }
+
+  // Build per-meal summaries for the current user (only meal types buddy hasn't logged yet)
+  const buddyMealTypes = new Set(entries.map((e) => e.mealType));
+  const userByMeal = new Map<string, typeof userEntries>();
+  for (const e of userEntries) {
+    const arr = userByMeal.get(e.mealType) ?? [];
+    arr.push(e);
+    userByMeal.set(e.mealType, arr);
+  }
+
+  const userMeals: UserMealSummary[] = Array.from(userByMeal.entries())
+    .filter(([mt]) => !buddyMealTypes.has(mt as MealType))
+    .map(([mt, mealEntries]) => {
+      const kcal = mealEntries.reduce((sum, e) => {
+        const n = safeNutrientsForEntry(e, e.food);
+        return sum + (n?.kcal ?? 0);
+      }, 0);
+      const meta = MEAL_META[mt] ?? { label: mt, icon: "🍽️" };
+      return { mealType: mt, label: meta.label, icon: meta.icon, itemCount: mealEntries.length, kcal };
+    });
 
   return (
     <div className="space-y-3">
@@ -90,7 +125,7 @@ export async function BuddyTodayFeed({
           <div className="mt-3 rounded-xl bg-white/60 py-4 text-center">
             <div className="text-2xl mb-1">⏳</div>
             <div className="text-xs font-medium text-gray-500">{buddyName} hasn't logged anything yet today</div>
-            <div className="text-[11px] text-gray-400 mt-0.5">Check back later — or give them a nudge!</div>
+            <div className="text-[11px] text-gray-400 mt-0.5">Check back later — or log for them below!</div>
           </div>
         ) : (
           <div className="mt-3 grid grid-cols-3 gap-2 sm:grid-cols-5">
@@ -108,6 +143,12 @@ export async function BuddyTodayFeed({
             ))}
           </div>
         )}
+
+        <LogForBuddy
+          buddyName={buddyName}
+          date={date}
+          userMeals={userMeals}
+        />
       </Card>
 
       {workouts.length > 0 && (
