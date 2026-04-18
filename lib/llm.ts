@@ -99,7 +99,7 @@ export async function estimateNutritionFromText(input: { text: string }): Promis
       },
       body: JSON.stringify({
         model: config.model,
-        max_tokens: 1024,
+        max_tokens: 4096,
         system: SYSTEM_PROMPT,
         messages: [{ role: "user", content: buildUserPrompt(input.text) }],
       }),
