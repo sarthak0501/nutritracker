@@ -18,6 +18,7 @@ import {
 } from "@/app/actions/workout";
 import { requireSession } from "@/lib/session";
 import { todayIsoDate } from "@/lib/dates";
+import { HistoryDatePicker } from "@/components/HistoryDatePicker";
 import Link from "next/link";
 
 function emptyTotals(): Nutrients {
@@ -33,6 +34,12 @@ function prevDate(date: string) {
 function nextDate(date: string) {
   const d = new Date(date + "T00:00:00");
   d.setDate(d.getDate() + 1);
+  return d.toISOString().slice(0, 10);
+}
+
+function daysBackIso(today: string, n: number) {
+  const d = new Date(today + "T00:00:00");
+  d.setDate(d.getDate() - n);
   return d.toISOString().slice(0, 10);
 }
 
@@ -126,10 +133,39 @@ export default async function HistoryPage({
             <div className="text-xs text-gray-400 tabular-nums">{date}</div>
             {isToday && <div className="text-xs text-brand-600 font-medium mt-0.5">Today</div>}
           </div>
-          <Link href={isToday ? "/history" : `/history?date=${nextDate(date)}`}
-            className={`rounded-xl bg-surface-muted px-3 py-2 text-sm font-semibold text-gray-600 hover:bg-gray-200 transition-colors ${isToday ? "opacity-30 pointer-events-none" : ""}`}>
-            →
-          </Link>
+          <div className="flex items-center gap-2">
+            <HistoryDatePicker date={date} maxDate={today} />
+            <Link href={isToday ? "/history" : `/history?date=${nextDate(date)}`}
+              className={`rounded-xl bg-surface-muted px-3 py-2 text-sm font-semibold text-gray-600 hover:bg-gray-200 transition-colors ${isToday ? "opacity-30 pointer-events-none" : ""}`}>
+              →
+            </Link>
+          </div>
+        </div>
+
+        {/* Quick jump */}
+        <div className="mt-3 flex flex-wrap justify-center gap-1.5">
+          {[
+            { label: "Today", target: today },
+            { label: "Yesterday", target: daysBackIso(today, 1) },
+            { label: "−7d", target: daysBackIso(today, 7) },
+            { label: "−30d", target: daysBackIso(today, 30) },
+          ].map(({ label, target }) => {
+            const active = date === target;
+            const href = target === today ? "/history" : `/history?date=${target}`;
+            return (
+              <Link
+                key={label}
+                href={href}
+                className={`rounded-full px-2.5 py-1 text-xs font-semibold transition-colors ${
+                  active
+                    ? "bg-gray-900 text-white"
+                    : "bg-surface-muted text-gray-500 hover:bg-gray-200"
+                }`}
+              >
+                {label}
+              </Link>
+            );
+          })}
         </div>
 
         {/* Day recap summary */}

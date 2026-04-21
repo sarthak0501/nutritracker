@@ -1,5 +1,7 @@
 "use client";
 
+import Link from "next/link";
+
 type Props = {
   days: string[];
   kcalByDate: Record<string, number>;
@@ -23,12 +25,14 @@ export function CalendarHeatmap({ days, kcalByDate, kcalTarget }: Props) {
         {days.map((d) => {
           const kcal = kcalByDate[d] ?? 0;
           const color = cellColor(kcal, kcalTarget);
-          const label = kcal > 0 ? `${d.slice(5)}: ${Math.round(kcal)} kcal` : `${d.slice(5)}: not logged`;
+          const label = kcal > 0 ? `${d.slice(5)}: ${Math.round(kcal)} kcal — click to view` : `${d.slice(5)}: not logged — click to log`;
           return (
-            <div
+            <Link
               key={d}
+              href={`/history?date=${d}`}
               title={label}
-              className={`w-6 h-6 rounded-sm ${color} cursor-default transition-opacity hover:opacity-70`}
+              aria-label={label}
+              className={`w-6 h-6 rounded-sm ${color} cursor-pointer transition-all hover:opacity-70 hover:ring-2 hover:ring-gray-400 hover:ring-offset-1`}
             />
           );
         })}
