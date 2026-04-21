@@ -9,6 +9,7 @@ import {
   type WeightTrendPoint,
 } from "@/components/TrendsChart";
 import { WeeklySummary } from "@/components/WeeklySummary";
+import { MonthlySummary } from "@/components/MonthlySummary";
 import { CalendarHeatmap } from "@/components/CalendarHeatmap";
 import { prisma } from "@/lib/db";
 import { addNutrients, safeNutrientsForEntry } from "@/lib/nutrition";
@@ -317,6 +318,37 @@ export default async function TrendsPage({
             workoutDays={avgWorkout.activeDays}
             totalBurned={workoutSum.burned}
             weightChange={weightChange}
+          />
+        </Card>
+      )}
+
+      {/* AI Month Review (30d view) */}
+      {range === 30 && hasGoals && (
+        <Card title="Your month in review">
+          <MonthlySummary
+            days={days.map((d) => {
+              const t = totalsByDate.get(d) ?? empty();
+              const w = workoutByDate.get(d) ?? { burned: 0, count: 0, volume: 0 };
+              return {
+                date: d,
+                kcal: Math.round(t.kcal),
+                protein: toFixed1(t.protein_g),
+                carbs: toFixed1(t.carbs_g),
+                fat: toFixed1(t.fat_g),
+                fiber: toFixed1(t.fiber_g ?? 0),
+                workoutKcal: Math.round(w.burned),
+                hasWorkout: w.count > 0,
+              };
+            })}
+            targets={{
+              kcal: profile!.kcalTarget,
+              protein: profile!.proteinTarget,
+              carbs: profile!.carbsTarget,
+              fat: profile!.fatTarget,
+              fiber: profile!.fiberTarget,
+            }}
+            weights={weightData.map((w) => ({ date: w.date, weightKg: w.weightKg }))}
+            rangeDays={30}
           />
         </Card>
       )}
