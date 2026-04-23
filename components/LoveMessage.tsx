@@ -2,7 +2,10 @@
 
 import { useEffect, useState } from "react";
 
-const HEARTS = ["❤️", "🩷", "💕", "💖", "💗", "💓", "🫀", "💝"];
+const HEARTS_DEFAULT = ["❤️", "🩷", "💕", "💖", "💗", "💓", "🫀", "💝"];
+const HEARTS_ANNIVERSARY = ["💕", "💖", "💗", "💝", "🌹", "💐", "🥂", "💍", "🎉", "✨"];
+
+type Mode = "default" | "anniversary";
 
 type Bubble = {
   id: number;
@@ -13,18 +16,22 @@ type Bubble = {
   delay: number;
 };
 
-export function LoveMessage() {
+export function LoveMessage({ mode = "default" }: { mode?: Mode }) {
   const [visible, setVisible] = useState(false);
   const [fading, setFading] = useState(false);
   const [bubbles, setBubbles] = useState<Bubble[]>([]);
 
   useEffect(() => {
-    if (sessionStorage.getItem("love-shown")) return;
-    sessionStorage.setItem("love-shown", "1");
+    const storageKey = mode === "anniversary" ? "love-shown-anniversary" : "love-shown";
+    if (sessionStorage.getItem(storageKey)) return;
+    sessionStorage.setItem(storageKey, "1");
 
-    const generated = Array.from({ length: 18 }, (_, i) => ({
+    const palette = mode === "anniversary" ? HEARTS_ANNIVERSARY : HEARTS_DEFAULT;
+    const count = mode === "anniversary" ? 28 : 18;
+
+    const generated = Array.from({ length: count }, (_, i) => ({
       id: i,
-      emoji: HEARTS[i % HEARTS.length],
+      emoji: palette[i % palette.length],
       left: Math.random() * 90 + 5,
       size: Math.random() * 24 + 20,
       duration: Math.random() * 3 + 3,
@@ -33,12 +40,18 @@ export function LoveMessage() {
     setBubbles(generated);
     setVisible(true);
 
-    const fadeTimer = setTimeout(() => setFading(true), 3500);
-    const hideTimer = setTimeout(() => setVisible(false), 4500);
+    const fadeMs = mode === "anniversary" ? 5500 : 3500;
+    const hideMs = mode === "anniversary" ? 6500 : 4500;
+    const fadeTimer = setTimeout(() => setFading(true), fadeMs);
+    const hideTimer = setTimeout(() => setVisible(false), hideMs);
     return () => { clearTimeout(fadeTimer); clearTimeout(hideTimer); };
-  }, []);
+  }, [mode]);
 
   if (!visible) return null;
+
+  const isAnniv = mode === "anniversary";
+  const overlayBg = isAnniv ? "rgba(255,235,240,0.7)" : "rgba(255,240,245,0.6)";
+  const cardBorder = isAnniv ? "border-rose-200" : "border-pink-100";
 
   return (
     <>
@@ -58,7 +71,7 @@ export function LoveMessage() {
 
       <div
         className={`fixed inset-0 z-50 flex items-center justify-center transition-opacity duration-1000 ${fading ? "opacity-0" : "opacity-100"}`}
-        style={{ background: "rgba(255,240,245,0.6)", backdropFilter: "blur(6px)" }}
+        style={{ background: overlayBg, backdropFilter: "blur(6px)" }}
         onClick={() => { setFading(true); setTimeout(() => setVisible(false), 600); }}
       >
         {/* Floating hearts */}
@@ -78,12 +91,27 @@ export function LoveMessage() {
         ))}
 
         {/* Message card */}
-        <div className="love-card relative rounded-3xl bg-white px-10 py-8 text-center shadow-2xl border border-pink-100 mx-6">
-          <div className="text-5xl mb-4">💖</div>
-          <div className="text-2xl font-extrabold text-pink-500 tracking-tight">
-            Sarthak Loves you
-          </div>
-          <div className="mt-2 text-sm text-pink-300 font-medium">always & forever ❤️</div>
+        <div className={`love-card relative rounded-3xl bg-white px-10 py-8 text-center shadow-2xl border ${cardBorder} mx-6`}>
+          {isAnniv ? (
+            <>
+              <div className="text-5xl mb-4">💍</div>
+              <div className="text-2xl font-extrabold text-rose-500 tracking-tight">
+                Happy Anniversary
+              </div>
+              <div className="mt-2 text-base font-bold text-pink-400">
+                Sarthak ❤️ Kavya
+              </div>
+              <div className="mt-1 text-sm text-pink-300 font-medium">forever & always 💕</div>
+            </>
+          ) : (
+            <>
+              <div className="text-5xl mb-4">💖</div>
+              <div className="text-2xl font-extrabold text-pink-500 tracking-tight">
+                Sarthak Loves you
+              </div>
+              <div className="mt-2 text-sm text-pink-300 font-medium">always & forever ❤️</div>
+            </>
+          )}
         </div>
       </div>
     </>

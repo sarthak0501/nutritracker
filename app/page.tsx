@@ -6,7 +6,7 @@ import { applyEstimatedMeal, applyEstimatedDay, createManualFoodAndLogEntry } fr
 import { requireSession } from "@/lib/session";
 import { round0, round1, safeNutrientsForEntry, addNutrients } from "@/lib/nutrition";
 import { BuddyTodayFeed } from "@/components/BuddyTodayFeed";
-import { todayIsoDate } from "@/lib/dates";
+import { todayIsoDate, isAnniversaryToday, daysUntilAnniversary } from "@/lib/dates";
 import { gradeColor } from "@/lib/meal-scoring";
 import { WaterTracker } from "@/components/WaterTracker";
 import { CopyYesterdayMeal } from "@/components/CopyYesterdayMeal";
@@ -15,6 +15,7 @@ import { MealSuggestion } from "@/components/MealSuggestion";
 import { getTodayDashboardData, emptyTotals } from "@/lib/dashboard";
 import { redirect } from "next/navigation";
 import { LoveMessage } from "@/components/LoveMessage";
+import { AnniversaryCountdown } from "@/components/AnniversaryCountdown";
 import { NutritionAlerts } from "@/components/NutritionAlerts";
 
 export default async function TodayPage() {
@@ -46,9 +47,16 @@ export default async function TodayPage() {
     streak,
   } = data;
 
+  const isKavya = user.username === "kavya";
+  const annivToday = isAnniversaryToday();
+  const daysToAnniv = daysUntilAnniversary();
+
   return (
     <div className="space-y-4">
-      {user.username === "kavya" && <LoveMessage />}
+      {isKavya && <LoveMessage mode={annivToday ? "anniversary" : "default"} />}
+      {isKavya && !annivToday && daysToAnniv >= 1 && daysToAnniv <= 3 && (
+        <AnniversaryCountdown days={daysToAnniv} />
+      )}
       {/* 1. PRIMARY: AI Composer — the hero */}
       <Card variant="action">
         <div className="mb-1 text-lg font-bold text-gray-900">What did you eat today?</div>
