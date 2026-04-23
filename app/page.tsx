@@ -6,7 +6,14 @@ import { applyEstimatedMeal, applyEstimatedDay, createManualFoodAndLogEntry } fr
 import { requireSession } from "@/lib/session";
 import { round0, round1, safeNutrientsForEntry, addNutrients } from "@/lib/nutrition";
 import { BuddyTodayFeed } from "@/components/BuddyTodayFeed";
-import { todayIsoDate, isAnniversaryToday, daysUntilAnniversary } from "@/lib/dates";
+import {
+  todayIsoDate,
+  isAnniversaryToday,
+  daysUntilAnniversary,
+  anniversaryYearCount,
+  daysSinceWedding,
+} from "@/lib/dates";
+import { getPersonalization, ordinal } from "@/lib/personalization";
 import { gradeColor } from "@/lib/meal-scoring";
 import { WaterTracker } from "@/components/WaterTracker";
 import { CopyYesterdayMeal } from "@/components/CopyYesterdayMeal";
@@ -50,18 +57,42 @@ export default async function TodayPage() {
     streak,
   } = data;
 
-  const isKavya = user.username === "kavya";
-  const annivToday = isAnniversaryToday();
-  const daysToAnniv = daysUntilAnniversary();
-  const isKavyaAnnivDay = isKavya && annivToday;
+  const personalization = getPersonalization();
+  const isSweetheart = !!(personalization && user.username === personalization.sweetheartUsername);
+  const anniv = personalization?.anniversary ?? null;
+  const annivToday = anniv ? isAnniversaryToday(anniv.month, anniv.day) : false;
+  const daysToAnniv = anniv ? daysUntilAnniversary(anniv.month, anniv.day) : Number.POSITIVE_INFINITY;
+  const isSweetheartAnnivDay = isSweetheart && annivToday;
+  const yearCount = anniv && isSweetheartAnnivDay
+    ? anniversaryYearCount(anniv.weddingYear, anniv.month, anniv.day)
+    : 0;
+  const yearOrdinal = yearCount === 1 ? "First" : yearCount > 1 ? ordinal(yearCount) : "";
+  const daysTogether = anniv && isSweetheartAnnivDay
+    ? daysSinceWedding(anniv.weddingYear, anniv.month, anniv.day)
+    : 0;
 
   return (
     <div className="space-y-4">
-      {isKavya && <LoveMessage mode={annivToday ? "anniversary" : "default"} />}
-      {isKavyaAnnivDay && <AmbientHearts />}
-      {isKavyaAnnivDay && <LoveLetterButton />}
-      {isKavyaAnnivDay && <AnniversaryCelebration />}
-      {isKavya && !annivToday && daysToAnniv >= 1 && daysToAnniv <= 3 && (
+      {isSweetheart && (
+        <LoveMessage
+          mode={annivToday ? "anniversary" : "default"}
+          partnerName={personalization?.partnerName}
+          sweetheartName={user.name}
+          yearCount={yearCount}
+          yearOrdinal={yearOrdinal}
+        />
+      )}
+      {isSweetheartAnnivDay && <AmbientHearts />}
+      {isSweetheartAnnivDay && <LoveLetterButton />}
+      {isSweetheartAnnivDay && (
+        <AnniversaryCelebration
+          partnerName={personalization?.partnerName}
+          yearCount={yearCount}
+          yearOrdinal={yearOrdinal}
+          daysTogether={daysTogether}
+        />
+      )}
+      {isSweetheart && anniv && !annivToday && daysToAnniv >= 1 && daysToAnniv <= 3 && (
         <AnniversaryCountdown days={daysToAnniv} />
       )}
       {/* 1. PRIMARY: AI Composer — the hero */}
@@ -82,12 +113,12 @@ export default async function TodayPage() {
           <div>
             <div className="text-xs font-medium text-gray-400 uppercase tracking-wide">{today}</div>
             <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-              <div className={`text-lg font-bold ${isKavyaAnnivDay ? "text-rose-500" : "text-gray-900"}`}>
-                {isKavyaAnnivDay ? "Hi, my love 💕" : `Hi, ${user.name}`}
+              <div className={`text-lg font-bold ${isSweetheartAnnivDay ? "text-rose-500" : "text-gray-900"}`}>
+                {isSweetheartAnnivDay ? "Hi, my love 💕" : `Hi, ${user.name}`}
               </div>
-              {isKavyaAnnivDay && (
+              {isSweetheartAnnivDay && daysTogether > 0 && (
                 <span className="inline-flex items-center gap-1 rounded-full bg-rose-50 px-2 py-0.5 text-xs font-bold text-rose-500 border border-rose-200">
-                  💍 Day 1 of Forever
+                  💍 Day {daysTogether} of Forever
                 </span>
               )}
               {streak > 0 && (

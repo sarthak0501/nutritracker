@@ -16,7 +16,21 @@ type Bubble = {
   delay: number;
 };
 
-export function LoveMessage({ mode = "default" }: { mode?: Mode }) {
+type Props = {
+  mode?: Mode;
+  partnerName?: string | null;
+  sweetheartName?: string | null;
+  yearCount?: number;
+  yearOrdinal?: string;
+};
+
+export function LoveMessage({
+  mode = "default",
+  partnerName,
+  sweetheartName,
+  yearCount = 0,
+  yearOrdinal,
+}: Props) {
   const [visible, setVisible] = useState(false);
   const [fading, setFading] = useState(false);
   const [bubbles, setBubbles] = useState<Bubble[]>([]);
@@ -73,6 +87,13 @@ export function LoveMessage({ mode = "default" }: { mode?: Mode }) {
     : "rgba(255,240,245,0.6)";
   const cardBorder = isAnniv ? "border-rose-200" : "border-pink-100";
 
+  const defaultTitle = partnerName ? `${partnerName} Loves you` : "You are loved";
+  const yearLabel = yearCount > 0 ? `${yearCount} YEAR${yearCount === 1 ? "" : "S"}` : "ANNIVERSARY";
+  const happyLead = yearOrdinal ? `Happy ${yearOrdinal}` : "Happy";
+  const coupleLine = partnerName && sweetheartName ? `${partnerName} ❤️ ${sweetheartName}` : null;
+  const signature = partnerName ? `— ${partnerName} 💕` : null;
+  const yearPhrase = yearCount === 1 ? "One year of you." : yearCount > 1 ? `${yearCount} years of you.` : "Every day with you.";
+
   return (
     <>
       <style>{`
@@ -106,7 +127,6 @@ export function LoveMessage({ mode = "default" }: { mode?: Mode }) {
         style={{ background: overlayBg, backdropFilter: "blur(8px)" }}
         onClick={() => { setFading(true); setTimeout(() => setVisible(false), 600); }}
       >
-        {/* Floating hearts */}
         {bubbles.map((b) => (
           <span
             key={b.id}
@@ -122,33 +142,32 @@ export function LoveMessage({ mode = "default" }: { mode?: Mode }) {
           </span>
         ))}
 
-        {/* Message card */}
         <div className={`love-card relative rounded-3xl bg-white px-8 py-8 text-center shadow-2xl border ${cardBorder} mx-6 max-w-md`}>
           {isAnniv ? (
             <>
               <div className="text-5xl mb-3">💍 ✨ 💕</div>
               <div className="anniv-badge text-sm font-extrabold tracking-[0.2em] mb-2">
-                ✦ 1 YEAR ✦
+                ✦ {yearLabel} ✦
               </div>
               <div className="text-3xl font-extrabold text-rose-500 tracking-tight leading-tight">
-                Happy First<br />Anniversary
+                {happyLead}<br />Anniversary
               </div>
-              <div className="mt-3 text-base font-bold text-pink-500">
-                Sarthak ❤️ Kavya
-              </div>
+              {coupleLine && (
+                <div className="mt-3 text-base font-bold text-pink-500">{coupleLine}</div>
+              )}
               <div className="mt-4 text-sm text-rose-400 font-medium leading-relaxed italic">
-                One year of you.<br />
+                {yearPhrase}<br />
                 Forever still to come.
               </div>
-              <div className="mt-3 text-xs text-pink-400 font-semibold">
-                — Sarthak 💕
-              </div>
+              {signature && (
+                <div className="mt-3 text-xs text-pink-400 font-semibold">{signature}</div>
+              )}
             </>
           ) : (
             <>
               <div className="text-5xl mb-4">💖</div>
               <div className="text-2xl font-extrabold text-pink-500 tracking-tight">
-                Sarthak Loves you
+                {defaultTitle}
               </div>
               <div className="mt-2 text-sm text-pink-300 font-medium">always & forever ❤️</div>
             </>

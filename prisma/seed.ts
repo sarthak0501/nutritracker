@@ -4,14 +4,24 @@ import bcrypt from "bcryptjs";
 const prisma = new PrismaClient();
 
 async function main() {
-  const hash = (pw: string) => bcrypt.hash(pw, 12);
+  const password = process.env.SEED_PASSWORD;
+  const primaryUsername = process.env.SEED_PRIMARY_USERNAME;
+  const partnerUsername = process.env.SEED_PARTNER_USERNAME;
 
-  const sarthak = await prisma.user.upsert({
-    where: { username: "sarthak" },
+  if (!password || !primaryUsername || !partnerUsername) {
+    throw new Error(
+      "Seed requires env vars: SEED_PASSWORD, SEED_PRIMARY_USERNAME, SEED_PARTNER_USERNAME"
+    );
+  }
+
+  const passwordHash = await bcrypt.hash(password, 12);
+
+  const primary = await prisma.user.upsert({
+    where: { username: primaryUsername },
     update: {},
     create: {
-      username: "sarthak",
-      passwordHash: await hash("REDACTED_PASSWORD"),
+      username: primaryUsername,
+      passwordHash,
       profile: {
         create: {
           kcalTarget: 2200,
@@ -24,12 +34,12 @@ async function main() {
     },
   });
 
-  const wife = await prisma.user.upsert({
-    where: { username: "kavya" },
+  const partner = await prisma.user.upsert({
+    where: { username: partnerUsername },
     update: {},
     create: {
-      username: "kavya",
-      passwordHash: await hash("REDACTED_PASSWORD"),
+      username: partnerUsername,
+      passwordHash,
       profile: {
         create: {
           kcalTarget: 1800,
@@ -43,12 +53,12 @@ async function main() {
   });
 
   await prisma.buddyRelationship.upsert({
-    where: { requesterId_addresseeId: { requesterId: sarthak.id, addresseeId: wife.id } },
+    where: { requesterId_addresseeId: { requesterId: primary.id, addresseeId: partner.id } },
     update: { status: "ACCEPTED" },
-    create: { requesterId: sarthak.id, addresseeId: wife.id, status: "ACCEPTED" },
+    create: { requesterId: primary.id, addresseeId: partner.id, status: "ACCEPTED" },
   });
 
-  console.log("✅ Seeded users: sarthak / kavya (both password: REDACTED_PASSWORD)");
+  console.log(`✅ Seeded users: ${primaryUsername} / ${partnerUsername} (password from SEED_PASSWORD)`);
   console.log("   They are already buddies!");
 }
 
