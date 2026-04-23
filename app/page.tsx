@@ -16,6 +16,9 @@ import { getTodayDashboardData, emptyTotals } from "@/lib/dashboard";
 import { redirect } from "next/navigation";
 import { LoveMessage } from "@/components/LoveMessage";
 import { AnniversaryCountdown } from "@/components/AnniversaryCountdown";
+import { AnniversaryCelebration } from "@/components/AnniversaryCelebration";
+import { AmbientHearts } from "@/components/AmbientHearts";
+import { LoveLetterButton } from "@/components/LoveLetterButton";
 import { NutritionAlerts } from "@/components/NutritionAlerts";
 
 export default async function TodayPage() {
@@ -50,10 +53,14 @@ export default async function TodayPage() {
   const isKavya = user.username === "kavya";
   const annivToday = isAnniversaryToday();
   const daysToAnniv = daysUntilAnniversary();
+  const isKavyaAnnivDay = isKavya && annivToday;
 
   return (
     <div className="space-y-4">
       {isKavya && <LoveMessage mode={annivToday ? "anniversary" : "default"} />}
+      {isKavyaAnnivDay && <AmbientHearts />}
+      {isKavyaAnnivDay && <LoveLetterButton />}
+      {isKavyaAnnivDay && <AnniversaryCelebration />}
       {isKavya && !annivToday && daysToAnniv >= 1 && daysToAnniv <= 3 && (
         <AnniversaryCountdown days={daysToAnniv} />
       )}
@@ -74,8 +81,15 @@ export default async function TodayPage() {
         <div className="flex items-center justify-between mb-4">
           <div>
             <div className="text-xs font-medium text-gray-400 uppercase tracking-wide">{today}</div>
-            <div className="flex items-center gap-2 mt-0.5">
-              <div className="text-lg font-bold text-gray-900">Hi, {user.name}</div>
+            <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+              <div className={`text-lg font-bold ${isKavyaAnnivDay ? "text-rose-500" : "text-gray-900"}`}>
+                {isKavyaAnnivDay ? "Hi, my love 💕" : `Hi, ${user.name}`}
+              </div>
+              {isKavyaAnnivDay && (
+                <span className="inline-flex items-center gap-1 rounded-full bg-rose-50 px-2 py-0.5 text-xs font-bold text-rose-500 border border-rose-200">
+                  💍 Day 1 of Forever
+                </span>
+              )}
               {streak > 0 && (
                 <span className="inline-flex items-center gap-1 rounded-full bg-orange-50 px-2 py-0.5 text-xs font-bold text-orange-500 border border-orange-100">
                   🔥 {streak}d
