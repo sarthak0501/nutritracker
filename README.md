@@ -253,4 +253,4 @@ The LLM client is provider-agnostic and reads config from env, so you can swap C
 
 ## License
 
-This is a personal project shared openly. Feel free to fork, modify, and deploy your own. No warranty — use at your own risk, especially for anything health-related.
+MIT — see [LICENSE](LICENSE). Fork, modify, and deploy your own freely. No warranty — use at your own risk, especially for anything health-related.
