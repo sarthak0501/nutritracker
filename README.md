@@ -8,6 +8,25 @@ Built as an open base app: fork it, deploy your own on free tiers, and build wha
 
 ---
 
+## Screenshots
+
+![AI logging — describe a meal in plain English, AI estimates every food and macro](docs/screenshots/ai-logging.gif)
+
+*Describe a meal, AI estimates the macros, save.*
+
+<table>
+  <tr>
+    <td width="50%"><img src="docs/screenshots/ai-logging.png" alt="AI meal estimation with per-food confidence" /></td>
+    <td width="50%"><img src="docs/screenshots/trends.png" alt="30-day trends with logging consistency heatmap" /></td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="docs/screenshots/buddy.png" alt="Buddy accountability — weekly challenge and leaderboard" /></td>
+    <td width="50%"><img src="docs/screenshots/profile.png" alt="Health profile — allergies, dietary restrictions, conditions" /></td>
+  </tr>
+</table>
+
+---
+
 ## What makes it different
 
 Most nutrition apps are calorie calculators. NutriTracker is an **AI nutrition coach with a social layer**:

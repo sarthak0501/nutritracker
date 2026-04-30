@@ -17,3 +17,4 @@ pnpm-debug.log*
 
 .DS_Store
 
+.playwright-video/
