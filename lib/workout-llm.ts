@@ -87,7 +87,9 @@ Rules:
 - weightKg is the load lifted, ALWAYS in kilograms — convert pounds to kg (1 lb = 0.4536 kg), so "100 lb" is 45.4
 - if the description states a load ("39 kg", "25kg", "10lb dumbbells"), you MUST include weightKg; omit it only for bodyweight, band, and cardio exercises
 - for dumbbell work, use the weight of a single dumbbell as stated
-- if the load varies across sets, use the heaviest working set
+- if the load varies across sets, average it across the working sets — "10 reps x 25 kg, 8 reps x 39 kg, 8 reps x 45 kg" is roughly 36, NOT the 45 kg top set
+- sets is HOW MANY sets were performed; reps is the count in ONE set — never the total across sets
+- a set list like "10 reps / 8 reps / 10 reps" is sets: 3, reps: 9 (the per-set average), NEVER sets: 3, reps: 28
 - for a rep range like 10-12, use the lower number
 - for per-side exercises, use the per-side rep count
 - for time-based exercises (planks, cardio), omit sets/reps and use durationMinutes instead

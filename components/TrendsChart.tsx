@@ -168,7 +168,16 @@ export function WorkoutChart({ data }: { data: WorkoutTrendPoint[] }) {
       <FacetLabel>Calories burned</FacetLabel>
       <ResponsiveContainer width="100%" height={140}>
         <BarChart data={formatted} syncId="workout" margin={{ top: 4, right: 10, left: 0, bottom: 0 }}>
-          <XAxis dataKey="date" tick={{ fontSize: 11, fill: "#9ca3af" }} axisLine={false} tickLine={false} />
+          {/* preserveStartEnd keeps the first and last day labelled when the
+              30-day range has more dates than fit across a phone screen */}
+          <XAxis
+            dataKey="date"
+            tick={{ fontSize: 11, fill: "#9ca3af" }}
+            axisLine={false}
+            tickLine={false}
+            interval="preserveStartEnd"
+            minTickGap={12}
+          />
           <YAxis
             width={FACET_AXIS_WIDTH}
             tick={{ fontSize: 11, fill: "#9ca3af" }}
