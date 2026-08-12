@@ -54,6 +54,7 @@ export async function applyEstimatedWorkout(input: {
         durationMinutes: ex.durationMinutes,
         sets: ex.sets,
         reps: ex.reps,
+        weightKg: ex.weightKg || null,
         caloriesBurned: ex.caloriesBurned,
         isEstimated: true,
         sourceText: input.sourceText,

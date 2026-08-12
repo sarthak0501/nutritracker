@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { callLlm, extractJson } from "./llm-client";
-import { llmNumber, llmInt, llmReps, llmMinutes, llmSeconds, llmStrings } from "./llm-schema";
+import { llmNumber, llmInt, llmReps, llmMinutes, llmSeconds, llmStrings, llmWeightKg } from "./llm-schema";
 
 // --- Workout Estimation (log) ---
 
@@ -10,6 +10,7 @@ const WorkoutItemSchema = z.object({
   durationMinutes: llmMinutes(z.number().optional()),
   sets: llmInt(z.number().optional()),
   reps: llmReps(z.number().optional()),
+  weightKg: llmWeightKg(z.number().nonnegative().optional()),
   caloriesBurned: llmNumber(z.number().nonnegative()),
   confidence: llmNumber(z.number().min(0).max(1)),
   assumptions: llmStrings(),
@@ -70,6 +71,7 @@ Return ONLY a JSON object with this exact structure:
       "durationMinutes": 30,
       "sets": 3,
       "reps": 10,
+      "weightKg": 40,
       "caloriesBurned": 150,
       "confidence": 0.8,
       "assumptions": ["assumed moderate intensity"]
@@ -80,8 +82,12 @@ Return ONLY a JSON object with this exact structure:
 }
 
 Rules:
-- durationMinutes, sets, reps are optional — include whichever is relevant
-- ALL numeric fields (sets, reps, durationMinutes, caloriesBurned, confidence) must be plain JSON numbers, NEVER strings
+- durationMinutes, sets, reps, weightKg are optional — include whichever is relevant
+- ALL numeric fields (sets, reps, weightKg, durationMinutes, caloriesBurned, confidence) must be plain JSON numbers, NEVER strings
+- weightKg is the load lifted, ALWAYS in kilograms — convert pounds to kg (1 lb = 0.4536 kg), so "100 lb" is 45.4
+- if the description states a load ("39 kg", "25kg", "10lb dumbbells"), you MUST include weightKg; omit it only for bodyweight, band, and cardio exercises
+- for dumbbell work, use the weight of a single dumbbell as stated
+- if the load varies across sets, use the heaviest working set
 - for a rep range like 10-12, use the lower number
 - for per-side exercises, use the per-side rep count
 - for time-based exercises (planks, cardio), omit sets/reps and use durationMinutes instead

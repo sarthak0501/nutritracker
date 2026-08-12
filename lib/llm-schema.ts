@@ -28,6 +28,8 @@ function extractNumber(val: unknown): unknown {
   return num ? Number(num[0]) : undefined;
 }
 
+const LB_RE = /(\d+(?:\.\d+)?|\.\d+)\s*(?:lbs?|pounds?)\b/i;
+const KG_RE = /(\d+(?:\.\d+)?|\.\d+)\s*(?:kgs?|kilos?|kilograms?)\b/i;
 const HOURS_RE = /(\d+(?:\.\d+)?|\.\d+)\s*(?:hours?|hrs?)\b/i;
 const MINUTES_RE = /(\d+(?:\.\d+)?|\.\d+)\s*(?:minutes?|mins?)\b/i;
 const SECONDS_RE = /(\d+(?:\.\d+)?|\.\d+)\s*(?:seconds?|secs?)\b/i;
@@ -65,6 +67,17 @@ function extractCount(val: unknown, schemeGroup: 1 | 2): unknown {
   return typeof n === "number" && Number.isFinite(n) ? Math.round(n) : n;
 }
 
+// A load in kg. "100 lb" → 45.4; a bare number is assumed to already be kg.
+// "bodyweight" and other unitless text yield undefined, not 0.
+function extractWeightKg(val: unknown): unknown {
+  if (val === null) return undefined;
+  if (typeof val !== "string") return val;
+  const text = stripThousands(val.trim());
+  const lb = text.match(LB_RE);
+  if (lb && !KG_RE.test(text)) return Math.round(Number(lb[1]) * 0.453592 * 10) / 10;
+  return extractNumber(text);
+}
+
 export function llmNumber<T extends z.ZodType>(schema: T) {
   return z.preprocess(extractNumber, schema);
 }
@@ -85,6 +98,11 @@ export function llmMinutes<T extends z.ZodType>(schema: T) {
 
 export function llmSeconds<T extends z.ZodType>(schema: T) {
   return z.preprocess((val) => extractDuration(val, "seconds"), schema);
+}
+
+// Load lifted, normalised to kg
+export function llmWeightKg<T extends z.ZodType>(schema: T) {
+  return z.preprocess(extractWeightKg, schema);
 }
 
 // String array where the LLM may send null or omit the key entirely

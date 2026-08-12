@@ -80,6 +80,7 @@ export function EstimateWorkout({ date, weightKg, onApply }: Props) {
                 {ex.muscleGroup && <span className="capitalize">{ex.muscleGroup} · </span>}
                 {ex.durationMinutes && <span>{ex.durationMinutes} min · </span>}
                 {ex.sets && ex.reps && <span>{ex.sets}×{ex.reps} · </span>}
+                {ex.weightKg ? <span>{ex.weightKg}kg · </span> : null}
                 ~{Math.round(ex.caloriesBurned)} kcal
               </div>
             </div>
