@@ -2,52 +2,110 @@
  * scripts/backfill-workout-weights.ts
  *
  * Historical WorkoutEntry rows have weightKg = null because the AI logging path
- * never captured the load (fixed in 81aa574). The load is still there in the
- * saved sourceText ("Lat pulldown 39kg, 10 reps, 3 sets"), so this re-runs the
- * now-fixed estimator over each distinct sourceText and fills in the weight for
- * the exercises it can match by name.
+ * never captured the load (fixed in 81aa574). The load is still sitting in the
+ * saved sourceText, in two shapes:
+ *
+ *   one-liner:  "Leg press 36 kg weight- 10 reps , 3 sets"
+ *   set block:  "Lat Pulldown\n10 reps x 25 kg\n8 reps x 39 kg\n..."
+ *
+ * Both are regular enough to parse directly, so this does no LLM calls: it
+ * splits the text into per-exercise segments, reads the set lines, and writes
+ * a rep-weighted mean load. Deterministic, free, and re-runnable.
  *
  * DRY RUN BY DEFAULT — prints what it would change and writes nothing.
- * Pass --apply to actually update rows.
  *
  * Usage:
  *   npx tsx --env-file=.env scripts/backfill-workout-weights.ts
  *   npx tsx --env-file=.env scripts/backfill-workout-weights.ts --apply
  *
  * Options:
- *   --apply          write the changes (default is dry run)
- *   --user <name>    limit to one username
- *   --limit <n>      only process the first n workout logs (n LLM calls)
- *   --all            also process logs whose text mentions no load at all
+ *   --apply        write the changes (default is dry run)
+ *   --fix-reps     also correct sets/reps where the stored values disagree
+ *                  with the text (see the reps note below)
+ *   --user <name>  limit to one username
+ *   --verbose      show the parsed set records per entry
  *
- * Requires the same LLM_* env vars the app uses. Only ever fills rows where
- * weightKg IS NULL — an existing weight is never overwritten.
+ * Only ever fills rows where weightKg IS NULL — an existing weight is never
+ * overwritten.
+ *
+ * Why a rep-weighted mean rather than the top set: trends multiplies
+ * weightKg × sets × reps, so the single stored number should be the one that
+ * reproduces true total volume. For 10x25kg, 8x39kg, 8x45kg that is 35.9 kg,
+ * not the 45 kg top set (which would overstate volume by 25%).
+ *
+ * Reps note: some rows stored the SUM of reps across sets rather than reps per
+ * set (a Lat Pulldown of 10+8+10+10 was saved as 4 sets x 38 reps), which
+ * inflates volume ~4x on its own. --fix-reps rewrites those from the text.
  */
 
 import { PrismaClient } from "@prisma/client";
-import { estimateWorkoutFromText } from "../lib/workout-llm";
 
 const prisma = new PrismaClient();
 
 const args = process.argv.slice(2);
 const APPLY = args.includes("--apply");
-const INCLUDE_NO_LOAD = args.includes("--all");
-const USER = argValue("--user");
-const LIMIT = Number(argValue("--limit") ?? "0") || Infinity;
+const FIX_REPS = args.includes("--fix-reps");
+const VERBOSE = args.includes("--verbose");
+const USER = args.includes("--user") ? args[args.indexOf("--user") + 1] : undefined;
 
-function argValue(flag: string): string | undefined {
-  const i = args.indexOf(flag);
-  return i >= 0 ? args[i + 1] : undefined;
+const LB_TO_KG = 0.453592;
+const MAX_PLAUSIBLE_KG = 500;
+const MATCH_THRESHOLD = 0.5;
+
+// "45 kg", "10lb", "20 pounds" — captures the number and the unit
+const WEIGHT_RE = /(\d+(?:\.\d+)?)\s*(kgs?|kilos?|kilograms?|lbs?|pounds?)\b/gi;
+// digits immediately before the word: "10 reps", "10reps", "1set."
+const REPS_RE = /(\d+)\s*reps?\b/i;
+const SETS_RE = /(\d+)\s*sets?\b/i;
+
+function toKg(value: number, unit: string): number {
+  return /^(lbs?|pounds?)$/i.test(unit) ? value * LB_TO_KG : value;
 }
 
-// Source text that plausibly states a load. Without one there is nothing to
-// recover, so we skip the LLM call entirely rather than pay for a null answer.
-const LOAD_RE = /\d+\s*(?:kgs?|kilos?|kilograms?|lbs?|pounds?)\b/i;
+function tokens(text: string): string[] {
+  // Parenthetical qualifiers are the estimator's embellishment, not the user's
+  // words ("Chest Press (Barbell or Machine)"), so they'd only dilute the score.
+  return text.replace(/\([^)]*\)/g, " ").toLowerCase().match(/[a-z]+/g) ?? [];
+}
 
-const MAX_PLAUSIBLE_KG = 500;
+// Tolerates the typos in the raw logs: "deadift"/"deadlift", "dumbell"/"dumbbell"
+function hasToken(lineTokens: string[], token: string): boolean {
+  return lineTokens.some(
+    (t) => t === token || (t.length >= 4 && token.length >= 4 && t.slice(0, 4) === token.slice(0, 4))
+  );
+}
 
-function normalize(name: string): string {
-  return name.toLowerCase().replace(/[^a-z0-9]/g, "");
+function nameScore(exerciseName: string, line: string): number {
+  const wanted = tokens(exerciseName);
+  if (wanted.length === 0) return 0;
+  const have = tokens(line);
+  return wanted.filter((t) => hasToken(have, t)).length / wanted.length;
+}
+
+// A bare line with no digits is an exercise heading, which is what separates
+// one exercise's set lines from the next.
+function isHeading(line: string): boolean {
+  return line.length > 0 && !/\d/.test(line);
+}
+
+type SetRecord = { weightKg: number; reps: number | null; sets: number };
+
+function parseSetLine(line: string): SetRecord[] {
+  const weights = [...line.matchAll(WEIGHT_RE)].map((m) => toKg(Number(m[1]), m[2]));
+  if (weights.length === 0) return [];
+
+  const reps = REPS_RE.exec(line);
+  const sets = SETS_RE.exec(line);
+
+  // Several weights on one line means several sets written inline
+  // ("6.8 kg x 1:00 6.8 kg x 1:00 ..."), so each becomes its own record.
+  return weights
+    .filter((w) => w > 0 && w <= MAX_PLAUSIBLE_KG)
+    .map((weightKg) => ({
+      weightKg,
+      reps: reps ? Number(reps[1]) : null,
+      sets: weights.length === 1 && sets ? Number(sets[1]) : 1,
+    }));
 }
 
 type Entry = {
@@ -61,42 +119,92 @@ type Entry = {
 };
 
 /**
- * Match each DB entry to an estimated exercise carrying a weight. Exact
- * normalized name first, then unambiguous substring containment; a candidate is
- * consumed once matched so two rows of the same exercise don't share one answer.
+ * Slice the log text into one line-range per entry. Each entry anchors on the
+ * line naming it; its segment runs to the next anchor or the next heading.
  */
-function matchWeights(
-  entries: Entry[],
-  candidates: { name: string; weightKg: number }[]
-): Map<string, number> {
-  const pool = candidates.map((c) => ({ ...c, key: normalize(c.name), used: false }));
-  const matched = new Map<string, number>();
+function segmentsFor(entries: Entry[], text: string): Map<string, string[]> {
+  const lines = text.split("\n").map((l) => l.trim());
+  const anchors = new Map<string, number>();
 
-  for (const pass of ["exact", "contains"] as const) {
-    for (const entry of entries) {
-      if (matched.has(entry.id)) continue;
-      const key = normalize(entry.exerciseName);
-      const hits = pool.filter((c) => {
-        if (c.used) return false;
-        return pass === "exact"
-          ? c.key === key
-          : c.key.includes(key) || key.includes(c.key);
-      });
-      if (hits.length !== 1) continue; // ambiguous → leave for a human
-      hits[0].used = true;
-      matched.set(entry.id, hits[0].weightKg);
+  let cursor = 0;
+  for (const entry of entries) {
+    let best = -1;
+    let bestScore = 0;
+    for (let i = cursor; i < lines.length; i++) {
+      const score = nameScore(entry.exerciseName, lines[i]);
+      // >= threshold, > best: a name wrapped across two lines ("Standing
+      // Dumbbell" / "Tricep Extension") scores exactly 0.5 on each, and we want
+      // the first of them so the segment starts at the top of the block.
+      if (score >= MATCH_THRESHOLD && score > bestScore) {
+        bestScore = score;
+        best = i;
+        if (score === 1) break; // can't do better
+      }
     }
+    if (best < 0) continue;
+    anchors.set(entry.id, best);
+    cursor = best + 1;
   }
 
-  return matched;
+  const anchorLines = new Set(anchors.values());
+  const segments = new Map<string, string[]>();
+
+  for (const [id, start] of anchors) {
+    const segment: string[] = [lines[start]];
+    let seenData = false;
+    for (let i = start + 1; i < lines.length; i++) {
+      if (anchorLines.has(i)) break;
+      if (isHeading(lines[i])) {
+        // An exercise name wrapped onto a second line ("Standing Dumbbell" /
+        // "Tricep Extension") is still the heading — only a heading that
+        // follows actual set lines starts the next exercise.
+        if (seenData) break;
+        continue;
+      }
+      if (lines[i]) seenData = true;
+      segment.push(lines[i]);
+    }
+    segments.set(id, segment);
+  }
+
+  return segments;
+}
+
+type Parsed = {
+  weightKg: number;
+  sets: number;
+  repsPerSet: number | null;
+  totalReps: number;
+  records: SetRecord[];
+};
+
+function parseSegment(segment: string[]): Parsed | null {
+  const records = segment.flatMap(parseSetLine);
+  if (records.length === 0) return null;
+
+  const setCount = records.reduce((n, r) => n + r.sets, 0);
+  const totalReps = records.reduce((n, r) => n + r.sets * (r.reps ?? 0), 0);
+
+  // Weight each set's load by the reps performed at it, so weightKg × sets ×
+  // reps reproduces the real total volume. With no rep counts anywhere (timed
+  // holds), fall back to a plain mean.
+  const weightKg =
+    totalReps > 0
+      ? records.reduce((sum, r) => sum + r.sets * (r.reps ?? 0) * r.weightKg, 0) / totalReps
+      : records.reduce((sum, r) => sum + r.sets * r.weightKg, 0) / setCount;
+
+  return {
+    weightKg: Math.round(weightKg * 10) / 10,
+    sets: setCount,
+    repsPerSet: totalReps > 0 ? Math.round(totalReps / setCount) : null,
+    totalReps,
+    records,
+  };
 }
 
 async function main() {
   const users = await prisma.user.findMany({ select: { id: true, username: true } });
   const usernameById = new Map(users.map((u) => [u.id, u.username]));
-
-  const profiles = await prisma.profile.findMany({ select: { userId: true, weightKg: true } });
-  const bodyWeightById = new Map(profiles.map((p) => [p.userId, p.weightKg ?? undefined]));
 
   const rows = await prisma.workoutEntry.findMany({
     where: {
@@ -117,7 +225,7 @@ async function main() {
   });
 
   // One applyEstimatedWorkout() call created every row sharing user+date+text,
-  // so that triple is the unit we re-estimate.
+  // so that triple is the log we re-read.
   const groups = new Map<string, Entry[]>();
   for (const r of rows) {
     if (!r.sourceText) continue;
@@ -127,97 +235,88 @@ async function main() {
     groups.set(key, list);
   }
 
-  const all = [...groups.values()];
-  const eligible = INCLUDE_NO_LOAD ? all : all.filter((g) => LOAD_RE.test(g[0].sourceText));
-  const targets = eligible.slice(0, LIMIT === Infinity ? undefined : LIMIT);
-
-  const skippedNoLoad = all.length - eligible.length;
   console.log(
-    `${rows.length} rows without weight across ${all.length} logs · ` +
-      `${targets.length} to process` +
-      (skippedNoLoad ? ` · ${skippedNoLoad} skipped (no load mentioned)` : "") +
-      (targets.length < eligible.length ? ` · ${eligible.length - targets.length} beyond --limit` : "")
+    `${rows.length} rows without weight across ${groups.size} logs · ` +
+      (APPLY ? "MODE: apply (will write)" : "MODE: dry run (no writes)") +
+      (FIX_REPS ? " · sets/reps correction ON" : "")
   );
-  console.log(APPLY ? "MODE: apply (will write)\n" : "MODE: dry run (no writes)\n");
 
   const proposals: {
-    username: string;
+    user: string;
     date: string;
-    exerciseName: string;
-    sets: number | null;
-    reps: number | null;
-    weightKg: number;
-    volumeKg: number;
+    exercise: string;
+    stored: string;
+    parsed: string;
+    kg: number;
+    volume: number;
+    repsFix: boolean;
   }[] = [];
-  let unmatched = 0;
-  let failed = 0;
+  let noWeight = 0;
+  const unanchored: string[] = [];
 
-  for (const [i, entries] of targets.entries()) {
-    const { userId, sourceText, date } = entries[0];
-    const username = usernameById.get(userId) ?? userId;
-    process.stdout.write(`[${i + 1}/${targets.length}] ${username} ${date} … `);
-
-    let estimate;
-    try {
-      estimate = await estimateWorkoutFromText({
-        text: sourceText,
-        weightKg: bodyWeightById.get(userId),
-      });
-    } catch (err) {
-      failed++;
-      console.log(`FAILED (${err instanceof Error ? err.message : String(err)})`);
-      continue;
-    }
-
-    const candidates = estimate.exercises
-      .filter((ex) => ex.weightKg && ex.weightKg > 0 && ex.weightKg <= MAX_PLAUSIBLE_KG)
-      .map((ex) => ({ name: ex.exerciseName, weightKg: ex.weightKg as number }));
-
-    const matched = matchWeights(entries, candidates);
-    unmatched += entries.length - matched.size;
+  for (const entries of groups.values()) {
+    const segments = segmentsFor(entries, entries[0].sourceText);
 
     for (const entry of entries) {
-      const weightKg = matched.get(entry.id);
-      if (weightKg === undefined) continue;
+      const segment = segments.get(entry.id);
+      if (!segment) {
+        unanchored.push(`${entry.date} ${entry.exerciseName}`);
+        continue;
+      }
+      const parsed = parseSegment(segment);
+      if (!parsed) {
+        noWeight++; // bodyweight, cardio or stretching — correctly left null
+        continue;
+      }
+
+      if (VERBOSE) {
+        console.log(
+          `\n${entry.date} ${entry.exerciseName}\n  segment: ${JSON.stringify(segment)}\n` +
+            `  records: ${JSON.stringify(parsed.records)}`
+        );
+      }
+
+      const repsFix =
+        FIX_REPS && parsed.repsPerSet !== null &&
+        (parsed.sets !== entry.sets || parsed.repsPerSet !== entry.reps);
+
+      const sets = repsFix ? parsed.sets : entry.sets ?? 0;
+      const reps = repsFix ? parsed.repsPerSet! : entry.reps ?? 0;
+
       proposals.push({
-        username,
-        date,
-        exerciseName: entry.exerciseName,
-        sets: entry.sets,
-        reps: entry.reps,
-        weightKg,
-        volumeKg: Math.round(weightKg * (entry.sets ?? 0) * (entry.reps ?? 0)),
+        user: usernameById.get(entry.userId) ?? entry.userId,
+        date: entry.date,
+        exercise: entry.exerciseName.slice(0, 30),
+        stored: `${entry.sets ?? "—"}×${entry.reps ?? "—"}`,
+        parsed: `${parsed.sets}×${parsed.repsPerSet ?? "—"}`,
+        kg: parsed.weightKg,
+        volume: Math.round(parsed.weightKg * sets * reps),
+        repsFix,
       });
+
       if (APPLY) {
-        await prisma.workoutEntry.update({ where: { id: entry.id }, data: { weightKg } });
+        await prisma.workoutEntry.update({
+          where: { id: entry.id },
+          data: {
+            weightKg: parsed.weightKg,
+            ...(repsFix ? { sets: parsed.sets, reps: parsed.repsPerSet } : {}),
+          },
+        });
       }
     }
-
-    console.log(`${matched.size}/${entries.length} matched`);
   }
 
-  console.log("");
-  console.table(
-    proposals.map((p) => ({
-      user: p.username,
-      date: p.date,
-      exercise: p.exerciseName.slice(0, 32),
-      scheme: `${p.sets ?? "—"}×${p.reps ?? "—"}`,
-      kg: p.weightKg,
-      volume: p.volumeKg,
-    }))
-  );
+  console.table(proposals.map(({ repsFix, ...row }) => ({ ...row, fix: repsFix ? "✓" : "" })));
 
-  const totalVolume = proposals.reduce((s, p) => s + p.volumeKg, 0);
+  const totalVolume = proposals.reduce((s, p) => s + p.volume, 0);
   console.log(
     `\n${proposals.length} rows ${APPLY ? "updated" : "would be updated"} · ` +
       `${totalVolume.toLocaleString()} kg of volume recovered · ` +
-      `${unmatched} left unmatched` +
-      (failed ? ` · ${failed} logs failed to estimate` : "")
+      `${noWeight} rows have no load in the text (left null) · ` +
+      `${unanchored.length} could not be located in their log`
   );
-  if (!APPLY && proposals.length) {
-    console.log("Re-run with --apply to write these.");
-  }
+  if (unanchored.length) console.log(`Not located: ${unanchored.join(", ")}`);
+  if (!APPLY && proposals.length) console.log("Re-run with --apply to write these.");
 }
 
 main()
