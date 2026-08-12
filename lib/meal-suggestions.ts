@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { callLlm, extractJson } from "./llm-client";
+import { llmNumber, llmStrings } from "./llm-schema";
 
 const SuggestionSchema = z.object({
   suggestions: z.array(
@@ -7,12 +8,12 @@ const SuggestionSchema = z.object({
       name: z.string(),
       description: z.string(),
       estimatedNutrients: z.object({
-        kcal: z.number(),
-        protein_g: z.number(),
-        carbs_g: z.number(),
-        fat_g: z.number(),
+        kcal: llmNumber(z.number()),
+        protein_g: llmNumber(z.number()),
+        carbs_g: llmNumber(z.number()),
+        fat_g: llmNumber(z.number()),
       }),
-      ingredients: z.array(z.string()),
+      ingredients: llmStrings(),
     })
   ),
 });
@@ -69,8 +70,14 @@ Rules:
 - Suggest exactly 3 meals that each use roughly 1/3 to 1/2 of the remaining budget
 - Keep meals practical and easy to prepare
 - Include a high-protein option
-- Strictly respect all allergies and dietary restrictions`;
+- Strictly respect all allergies and dietary restrictions
+- ALL numeric fields must be plain JSON numbers, NEVER strings`;
 
   const text = await callLlm(SYSTEM, prompt);
-  return SuggestionSchema.parse(extractJson(text));
+  const parsed = SuggestionSchema.safeParse(extractJson(text));
+  if (!parsed.success) {
+    console.error("Meal suggestions failed validation:", parsed.error.issues, text);
+    throw new Error("The AI returned an unexpected response format. Please try again.");
+  }
+  return parsed.data;
 }

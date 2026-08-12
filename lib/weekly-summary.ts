@@ -46,5 +46,10 @@ Rules:
 - Keep suggestions actionable and simple`;
 
   const text = await callLlm(SYSTEM, prompt);
-  return WeeklySummarySchema.parse(extractJson(text));
+  const parsed = WeeklySummarySchema.safeParse(extractJson(text));
+  if (!parsed.success) {
+    console.error("Weekly summary failed validation:", parsed.error.issues, text);
+    throw new Error("The AI returned an unexpected response format. Please try again.");
+  }
+  return parsed.data;
 }

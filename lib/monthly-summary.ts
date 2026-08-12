@@ -256,6 +256,10 @@ Rules:
 - Call out training-day vs rest-day eating if difference is unusual (e.g. eating less on training days).`;
 
   const text = await callLlm(SYSTEM, prompt);
-  const summary = MonthlySummarySchema.parse(extractJson(text));
-  return { signals, summary };
+  const parsed = MonthlySummarySchema.safeParse(extractJson(text));
+  if (!parsed.success) {
+    console.error("Monthly summary failed validation:", parsed.error.issues, text);
+    throw new Error("The AI returned an unexpected response format. Please try again.");
+  }
+  return { signals, summary: parsed.data };
 }

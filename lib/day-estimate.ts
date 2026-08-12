@@ -1,34 +1,35 @@
 import { z } from "zod";
 import { getLlmConfig } from "./llm";
+import { llmNumber, llmStrings, llmString } from "./llm-schema";
 
 // --- Zod schemas ---
 
 const DayItemSchema = z.object({
   description: z.string(),
-  quantity: z.number().positive(),
+  quantity: llmNumber(z.number().positive()),
   unit: z.string(),
   nutrients: z.object({
-    kcal: z.number().nonnegative(),
-    protein_g: z.number().nonnegative(),
-    carbs_g: z.number().nonnegative(),
-    fat_g: z.number().nonnegative(),
-    fiber_g: z.number().nonnegative().optional(),
+    kcal: llmNumber(z.number().nonnegative()),
+    protein_g: llmNumber(z.number().nonnegative()),
+    carbs_g: llmNumber(z.number().nonnegative()),
+    fat_g: llmNumber(z.number().nonnegative()),
+    fiber_g: llmNumber(z.number().nonnegative().optional()),
   }),
-  confidence: z.number().min(0).max(1),
-  assumptions: z.array(z.string()),
+  confidence: llmNumber(z.number().min(0).max(1)),
+  assumptions: llmStrings(),
 });
 
 const DayMealSchema = z.object({
   mealType: z.enum(["BREAKFAST", "LUNCH", "DINNER", "SNACK", "CUSTOM"]),
-  mealName: z.string().nullable(),
-  detectedFrom: z.string(),
+  mealName: z.string().nullish(),
+  detectedFrom: llmString(""),
   items: z.array(DayItemSchema),
 });
 
 const DayEstimateSchema = z.object({
   meals: z.array(DayMealSchema),
-  unparsed: z.array(z.string()).default([]),
-  notes: z.string().default(""),
+  unparsed: llmStrings(),
+  notes: llmString(""),
 });
 
 export type DayEstimateResponse = z.infer<typeof DayEstimateSchema>;
@@ -93,6 +94,7 @@ Rules:
 - Group items by detected meal type
 - nutrients are for the TOTAL quantity of that item (not per 100g)
 - quantity must always be in grams
+- ALL numeric fields must be plain JSON numbers (100, not "100g"), NEVER strings
 - confidence: 0.9+ if well-known, 0.7-0.9 if reasonable guess, <0.7 if uncertain
 - If unsure about meal type, default to SNACK with low confidence
 - Do NOT merge different foods into one item — keep them separate`;
@@ -148,6 +150,10 @@ export async function estimateDayFromText(text: string): Promise<DayEstimateResp
   const jsonMatch = responseText.match(/\{[\s\S]*\}/);
   if (!jsonMatch) throw new Error("No JSON found in LLM response");
 
-  const parsed = JSON.parse(jsonMatch[0]);
-  return DayEstimateSchema.parse(parsed);
+  const parsed = DayEstimateSchema.safeParse(JSON.parse(jsonMatch[0]));
+  if (!parsed.success) {
+    console.error("Day estimate failed validation:", parsed.error.issues, responseText);
+    throw new Error("The AI returned an unexpected response format. Please try again.");
+  }
+  return parsed.data;
 }

@@ -252,7 +252,9 @@ export function WorkoutRecommendations({ date, profile, previousWorkouts, onAddE
                     <div className="text-sm font-medium">{ex.exerciseName}</div>
                     <div className="text-xs text-gray-500">
                       <span className="capitalize">{ex.muscleGroup}</span>
-                      {" · "}{editSets[i] || ex.sets}×{editReps[i] || ex.reps}
+                      {(editSets[i] || ex.sets) && (editReps[i] || ex.reps) && (
+                        <> · {editSets[i] || ex.sets}×{editReps[i] || ex.reps}</>
+                      )}
                       {ex.restSeconds && <> · {ex.restSeconds}s rest</>}
                       {ex.durationMinutes && <> · ~{ex.durationMinutes} min</>}
                       {" · ~"}{Math.round(ex.estimatedCalories)} kcal
@@ -306,7 +308,7 @@ export function WorkoutRecommendations({ date, profile, previousWorkouts, onAddE
                       <input
                         type="number"
                         step="1"
-                        value={editSets[i] ?? ex.sets}
+                        value={editSets[i] ?? ex.sets ?? ""}
                         onChange={(e) => setEditSets((p) => ({ ...p, [i]: e.target.value }))}
                         className="rounded-md border border-gray-200 bg-white px-2 py-1.5 text-sm"
                       />
@@ -316,7 +318,7 @@ export function WorkoutRecommendations({ date, profile, previousWorkouts, onAddE
                       <input
                         type="number"
                         step="1"
-                        value={editReps[i] ?? ex.reps}
+                        value={editReps[i] ?? ex.reps ?? ""}
                         onChange={(e) => setEditReps((p) => ({ ...p, [i]: e.target.value }))}
                         className="rounded-md border border-gray-200 bg-white px-2 py-1.5 text-sm"
                       />

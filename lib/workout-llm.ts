@@ -1,23 +1,24 @@
 import { z } from "zod";
 import { callLlm, extractJson } from "./llm-client";
+import { llmNumber, llmInt, llmReps, llmMinutes, llmSeconds, llmStrings } from "./llm-schema";
 
 // --- Workout Estimation (log) ---
 
 const WorkoutItemSchema = z.object({
   exerciseName: z.string(),
-  muscleGroup: z.string().optional(),
-  durationMinutes: z.number().optional(),
-  sets: z.number().optional(),
-  reps: z.number().optional(),
-  caloriesBurned: z.number().nonnegative(),
-  confidence: z.number().min(0).max(1),
-  assumptions: z.array(z.string()),
+  muscleGroup: z.string().nullish(),
+  durationMinutes: llmMinutes(z.number().optional()),
+  sets: llmInt(z.number().optional()),
+  reps: llmReps(z.number().optional()),
+  caloriesBurned: llmNumber(z.number().nonnegative()),
+  confidence: llmNumber(z.number().min(0).max(1)),
+  assumptions: llmStrings(),
 });
 
 const WorkoutEstimateResponseSchema = z.object({
   exercises: z.array(WorkoutItemSchema),
-  recommendations: z.array(z.string()).default([]),
-  notes: z.array(z.string()).default([]),
+  recommendations: llmStrings(),
+  notes: llmStrings(),
 });
 
 export type WorkoutEstimateResponse = z.infer<typeof WorkoutEstimateResponseSchema>;
@@ -26,22 +27,22 @@ export type WorkoutEstimateResponse = z.infer<typeof WorkoutEstimateResponseSche
 
 const RecommendedExerciseSchema = z.object({
   exerciseName: z.string(),
-  muscleGroup: z.string(),
-  sets: z.number(),
-  reps: z.number(),
-  restSeconds: z.number().optional(),
-  durationMinutes: z.number().optional(),
-  estimatedCalories: z.number().nonnegative(),
-  notes: z.string().optional(),
+  muscleGroup: z.string().nullish(),
+  sets: llmInt(z.number().optional()),
+  reps: llmReps(z.number().optional()),
+  restSeconds: llmSeconds(z.number().optional()),
+  durationMinutes: llmMinutes(z.number().optional()),
+  estimatedCalories: llmNumber(z.number().nonnegative()),
+  notes: z.string().nullish(),
 });
 
 const WorkoutRecommendationResponseSchema = z.object({
   exercises: z.array(RecommendedExerciseSchema),
-  warmup: z.string().optional(),
-  cooldown: z.string().optional(),
-  totalEstimatedCalories: z.number().nonnegative(),
-  totalDurationMinutes: z.number(),
-  notes: z.array(z.string()).default([]),
+  warmup: z.string().nullish(),
+  cooldown: z.string().nullish(),
+  totalEstimatedCalories: llmNumber(z.number().nonnegative()),
+  totalDurationMinutes: llmMinutes(z.number()),
+  notes: llmStrings(),
 });
 
 export type RecommendedExercise = z.infer<typeof RecommendedExerciseSchema>;
@@ -80,6 +81,10 @@ Return ONLY a JSON object with this exact structure:
 
 Rules:
 - durationMinutes, sets, reps are optional — include whichever is relevant
+- ALL numeric fields (sets, reps, durationMinutes, caloriesBurned, confidence) must be plain JSON numbers, NEVER strings
+- for a rep range like 10-12, use the lower number
+- for per-side exercises, use the per-side rep count
+- for time-based exercises (planks, cardio), omit sets/reps and use durationMinutes instead
 - caloriesBurned is the total for that exercise
 - confidence: 0.8+ for well-known exercises, lower for unusual ones`;
 }
@@ -92,7 +97,12 @@ export async function estimateWorkoutFromText(input: {
     ESTIMATE_SYSTEM,
     buildEstimatePrompt(input.text, input.weightKg)
   );
-  return WorkoutEstimateResponseSchema.parse(extractJson(responseText));
+  const parsed = WorkoutEstimateResponseSchema.safeParse(extractJson(responseText));
+  if (!parsed.success) {
+    console.error("Workout estimate failed validation:", parsed.error.issues, responseText);
+    throw new Error("The AI returned an unexpected response format. Please try again.");
+  }
+  return parsed.data;
 }
 
 // --- Recommend workout (for the recommendations section) ---
@@ -169,6 +179,9 @@ function buildRecommendPrompt(input: RecommendInput) {
 Rules:
 - Include 5-8 exercises appropriate for the focus area
 - Only use exercises possible with the available equipment
+- ALL numeric fields (sets, reps, restSeconds, durationMinutes, calories) must be plain JSON numbers, NEVER strings
+- for rep ranges, pick a single number (10, not "8-12")
+- for timed exercises (planks, cardio), omit reps and use durationMinutes instead
 - estimatedCalories per exercise should use MET method
 - Include restSeconds between sets
 - durationMinutes is total time for that exercise including rest
@@ -182,5 +195,10 @@ export async function recommendWorkout(input: RecommendInput): Promise<WorkoutRe
     RECOMMEND_SYSTEM,
     buildRecommendPrompt(input)
   );
-  return WorkoutRecommendationResponseSchema.parse(extractJson(responseText));
+  const parsed = WorkoutRecommendationResponseSchema.safeParse(extractJson(responseText));
+  if (!parsed.success) {
+    console.error("Workout recommendation failed validation:", parsed.error.issues, responseText);
+    throw new Error("The AI returned an unexpected response format. Please try again.");
+  }
+  return parsed.data;
 }

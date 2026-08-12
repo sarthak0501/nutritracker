@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { llmNumber, llmStrings } from "./llm-schema";
 
 const EnvSchema = z.object({
   LLM_ENABLED: z.string().default("false"),
@@ -28,23 +29,23 @@ export function getLlmConfig() {
 
 const EstimatedItemSchema = z.object({
   description: z.string(),
-  quantity: z.number().positive(),
+  quantity: llmNumber(z.number().positive()),
   unit: z.string(),
-  assumptions: z.array(z.string()),
+  assumptions: llmStrings(),
   nutrients: z.object({
-    kcal: z.number().nonnegative(),
-    protein_g: z.number().nonnegative(),
-    carbs_g: z.number().nonnegative(),
-    fat_g: z.number().nonnegative(),
-    fiber_g: z.number().nonnegative().optional(),
-    sodium_mg: z.number().nonnegative().optional(),
+    kcal: llmNumber(z.number().nonnegative()),
+    protein_g: llmNumber(z.number().nonnegative()),
+    carbs_g: llmNumber(z.number().nonnegative()),
+    fat_g: llmNumber(z.number().nonnegative()),
+    fiber_g: llmNumber(z.number().nonnegative().optional()),
+    sodium_mg: llmNumber(z.number().nonnegative().optional()),
   }),
-  confidence: z.number().min(0).max(1),
+  confidence: llmNumber(z.number().min(0).max(1)),
 });
 
 const EstimateResponseSchema = z.object({
   items: z.array(EstimatedItemSchema),
-  notes: z.array(z.string()).default([]),
+  notes: llmStrings(),
 });
 
 export type EstimateResponse = z.infer<typeof EstimateResponseSchema>;
@@ -79,6 +80,7 @@ Return ONLY a JSON object with this exact structure:
 Rules:
 - Split into individual food items
 - nutrients are for the TOTAL quantity (not per 100g)
+- ALL numeric fields must be plain JSON numbers (150, not "150 kcal" or "1/2"), NEVER strings
 - confidence: 0.9+ if well-known, 0.7-0.9 if reasonable assumption, below 0.7 if very uncertain
 - Include assumptions about portion sizes`;
 }
@@ -132,6 +134,10 @@ export async function estimateNutritionFromText(input: { text: string }): Promis
   const jsonMatch = responseText.match(/\{[\s\S]*\}/);
   if (!jsonMatch) throw new Error("No JSON found in LLM response");
 
-  const parsed = JSON.parse(jsonMatch[0]);
-  return EstimateResponseSchema.parse(parsed);
+  const parsed = EstimateResponseSchema.safeParse(JSON.parse(jsonMatch[0]));
+  if (!parsed.success) {
+    console.error("Nutrition estimate failed validation:", parsed.error.issues, responseText);
+    throw new Error("The AI returned an unexpected response format. Please try again.");
+  }
+  return parsed.data;
 }
