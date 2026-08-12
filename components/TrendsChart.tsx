@@ -127,23 +127,63 @@ export function NutritionChart({ data, kcalTarget }: { data: TrendPoint[]; kcalT
   );
 }
 
+// Volume peaks around 14x calories burned, so one shared axis flattens the
+// calorie series into an unreadable stub. Two stacked facets on a common x-axis
+// give each measure its own scale without a second y-axis inventing a
+// correlation between them. Fixed YAxis width keeps the days aligned vertically.
+const FACET_AXIS_WIDTH = 46;
+const VOLUME_COLOR = "#2a78d6";
+const BURNED_COLOR = "#eb6834";
+
+function FacetLabel({ children }: { children: React.ReactNode }) {
+  return <div className="text-[11px] font-semibold uppercase tracking-wide text-gray-400">{children}</div>;
+}
+
 export function WorkoutChart({ data }: { data: WorkoutTrendPoint[] }) {
   const formatted = data.map((d) => ({ ...d, date: d.date.slice(5) }));
 
   return (
-    <ResponsiveContainer width="100%" height={260}>
-      <BarChart data={formatted} margin={{ top: 5, right: 10, left: -10, bottom: 5 }}>
-        <XAxis dataKey="date" tick={{ fontSize: 11, fill: "#9ca3af" }} />
-        <YAxis tick={{ fontSize: 11, fill: "#9ca3af" }} />
-        <Tooltip
-          contentStyle={{ background: "#fff", border: "none", borderRadius: 12, boxShadow: "0 4px 12px rgba(0,0,0,0.08)" }}
-          labelStyle={{ color: "#6b7280", fontWeight: 600 }}
-        />
-        <Legend wrapperStyle={{ fontSize: 12 }} />
-        <Bar dataKey="caloriesBurned" fill="#3b82f6" radius={[6, 6, 0, 0]} name="Calories burned" />
-        <Bar dataKey="totalWeightKg" fill="#8b5cf6" radius={[6, 6, 0, 0]} name="Volume (kg)" />
-      </BarChart>
-    </ResponsiveContainer>
+    <div className="grid gap-2">
+      <FacetLabel>Volume (kg)</FacetLabel>
+      <ResponsiveContainer width="100%" height={120}>
+        {/* syncId links the two facets so hovering a day highlights it in both */}
+        <BarChart data={formatted} syncId="workout" margin={{ top: 4, right: 10, left: 0, bottom: 0 }}>
+          <XAxis dataKey="date" hide />
+          <YAxis
+            width={FACET_AXIS_WIDTH}
+            tick={{ fontSize: 11, fill: "#9ca3af" }}
+            axisLine={false}
+            tickLine={false}
+            tickFormatter={(v: number) => (v >= 1000 ? `${v / 1000}k` : String(v))}
+          />
+          <Tooltip
+            {...tooltipStyle}
+            cursor={{ fill: "rgba(0,0,0,0.04)" }}
+            formatter={(value: number) => [`${value.toLocaleString()} kg`, "Volume"]}
+          />
+          <Bar dataKey="totalWeightKg" fill={VOLUME_COLOR} radius={[4, 4, 0, 0]} name="Volume" />
+        </BarChart>
+      </ResponsiveContainer>
+
+      <FacetLabel>Calories burned</FacetLabel>
+      <ResponsiveContainer width="100%" height={140}>
+        <BarChart data={formatted} syncId="workout" margin={{ top: 4, right: 10, left: 0, bottom: 0 }}>
+          <XAxis dataKey="date" tick={{ fontSize: 11, fill: "#9ca3af" }} axisLine={false} tickLine={false} />
+          <YAxis
+            width={FACET_AXIS_WIDTH}
+            tick={{ fontSize: 11, fill: "#9ca3af" }}
+            axisLine={false}
+            tickLine={false}
+          />
+          <Tooltip
+            {...tooltipStyle}
+            cursor={{ fill: "rgba(0,0,0,0.04)" }}
+            formatter={(value: number) => [`${Math.round(value)} kcal`, "Burned"]}
+          />
+          <Bar dataKey="caloriesBurned" fill={BURNED_COLOR} radius={[4, 4, 0, 0]} name="Calories burned" />
+        </BarChart>
+      </ResponsiveContainer>
+    </div>
   );
 }
 
