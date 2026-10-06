@@ -151,8 +151,10 @@ try {
     currentPage = alex;
   });
 
-  await step("weekly check-in opt-in leaves the buddy's preference unchanged", async () => {
+  await step("one-sided weekly opt-in leaves buddy preference unchanged and participation wording private", async () => {
     await checkIn(alex).getByRole("button", { name: "Try weekly check-ins", exact: true }).click();
+    await checkIn(alex).getByText("qa_jamie: status remains private until both join", { exact: true }).waitFor();
+    assert.doesNotMatch(await checkIn(alex).innerText(), /hasn.t opted in|hasn.t joined/i);
     await checkIn(alex).getByRole("button", { name: "I’ve checked in this week", exact: true }).click();
     assert.equal((await db.profile.findUniqueOrThrow({ where: { userId: fixture.alex.id } })).cooperativeCheckInEnabled, true);
     assert.equal((await db.profile.findUniqueOrThrow({ where: { userId: fixture.jamie.id } })).cooperativeCheckInEnabled, false);
