@@ -27,28 +27,43 @@ export function getLlmConfig() {
   };
 }
 
-const EstimatedItemSchema = z.object({
-  description: z.string(),
-  quantity: llmNumber(z.number().positive()),
-  unit: z.string(),
-  assumptions: llmStrings(),
+// Preserve tolerant LLM number parsing without turning explicitly negative
+// strings into positive quantities or nutrient values.
+function estimateNumber<T extends z.ZodType>(schema: T) {
+  return z.preprocess(
+    (value) => typeof value === "string" && /^\s*~?\s*[-−]\s*(?:\d|\.)/.test(value)
+      ? Number.NaN
+      : value,
+    llmNumber(schema),
+  );
+}
+
+export const EstimatedItemSchema = z.object({
+  description: z.string().trim().min(1),
+  quantity: estimateNumber(z.number().finite().positive()),
+  unit: z.string().trim().regex(/^(?:g|grams?)$/i).transform(() => "g" as const),
+  assumptions: llmStrings().pipe(z.array(z.string()).max(100)),
   nutrients: z.object({
-    kcal: llmNumber(z.number().nonnegative()),
-    protein_g: llmNumber(z.number().nonnegative()),
-    carbs_g: llmNumber(z.number().nonnegative()),
-    fat_g: llmNumber(z.number().nonnegative()),
-    fiber_g: llmNumber(z.number().nonnegative().optional()),
-    sodium_mg: llmNumber(z.number().nonnegative().optional()),
+    kcal: estimateNumber(z.number().finite().nonnegative()),
+    protein_g: estimateNumber(z.number().finite().nonnegative()),
+    carbs_g: estimateNumber(z.number().finite().nonnegative()),
+    fat_g: estimateNumber(z.number().finite().nonnegative()),
+    fiber_g: estimateNumber(z.number().finite().nonnegative().optional()),
+    sodium_mg: estimateNumber(z.number().finite().nonnegative().optional()),
   }),
-  confidence: llmNumber(z.number().min(0).max(1)),
+  confidence: estimateNumber(z.number().finite().min(0).max(1)),
 });
 
 const EstimateResponseSchema = z.object({
-  items: z.array(EstimatedItemSchema),
-  notes: llmStrings(),
+  items: z.array(EstimatedItemSchema).min(1).max(100),
+  notes: llmStrings().pipe(z.array(z.string()).max(100)),
 });
 
 export type EstimateResponse = z.infer<typeof EstimateResponseSchema>;
+
+export function parseNutritionEstimate(value: unknown): EstimateResponse {
+  return EstimateResponseSchema.parse(value);
+}
 
 const SYSTEM_PROMPT = `You are a precise nutrition estimation assistant. Given a meal description, return a JSON object estimating the nutrition of each component. Be conservative with confidence when uncertain. Always return valid JSON matching the schema exactly.`;
 
@@ -60,8 +75,8 @@ Return ONLY a JSON object with this exact structure:
   "items": [
     {
       "description": "food item name",
-      "quantity": 1,
-      "unit": "serving unit (e.g. large, medium, slice, cup)",
+      "quantity": 100,
+      "unit": "g",
       "assumptions": ["assumption 1", "assumption 2"],
       "nutrients": {
         "kcal": 0,
@@ -78,11 +93,14 @@ Return ONLY a JSON object with this exact structure:
 }
 
 Rules:
-- Split into individual food items
+- Split into 1–100 individual food items
+- Convert every quantity to its estimated total weight in grams; unit must be "g"
+- Convert counts, cups, slices, and servings to grams; for example, 2 eggs → quantity 100, unit "g"
+- quantity must be finite and greater than zero; all nutrient values must be finite and zero or greater
 - nutrients are for the TOTAL quantity (not per 100g)
 - ALL numeric fields must be plain JSON numbers (150, not "150 kcal" or "1/2"), NEVER strings
 - confidence: 0.9+ if well-known, 0.7-0.9 if reasonable assumption, below 0.7 if very uncertain
-- Include assumptions about portion sizes`;
+- Explain original portions and gram conversions in assumptions (at most 100 assumptions per item and 100 overall notes)`;
 }
 
 export async function estimateNutritionFromText(input: { text: string }): Promise<EstimateResponse> {

@@ -1,467 +1,222 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition, type FormEvent } from "react";
 import type { EstimateResponse } from "@/lib/llm";
 import type { DayMeal, DayEstimateResponse } from "@/lib/day-estimate";
+import type { LogResult } from "@/lib/meal-writes";
+import { undoLogBatch } from "@/app/actions/logging";
+import { DraftPrivacy } from "@/components/DraftPrivacy";
+import { DRAFTS_CLEARED_EVENT, MealDraftSchema, emptyMealDraft, pruneMealDrafts, readScopedDraft, removeScopedDraft, scaleEstimatedItem, writeScopedDraft, type DraftScope, type MealDraft } from "@/lib/drafts";
 
-type Props = {
+export type EstimateFromTextProps = {
   date: string;
+  userId: string;
   defaultMealType?: string;
   forceMode?: "single" | "fullday";
-  onApply: (input: {
-    date: string;
-    mealType: string;
-    mealName?: string;
-    estimate: EstimateResponse;
-    sourceText: string;
-  }) => Promise<void>;
-  onApplyDay: (input: {
-    date: string;
-    meals: DayMeal[];
-    sourceText: string;
-  }) => Promise<void>;
+  onApply: (input: { date: string; mealType: string; mealName?: string; estimate: EstimateResponse; sourceText: string; requestId?: string; expectedUserId: string }) => Promise<LogResult>;
+  onApplyDay: (input: { date: string; meals: DayMeal[]; sourceText: string; requestId?: string; expectedUserId: string }) => Promise<LogResult>;
 };
 
 const MEALS = [
-  { key: "BREAKFAST", label: "Breakfast" },
-  { key: "LUNCH", label: "Lunch" },
-  { key: "DINNER", label: "Dinner" },
-  { key: "SNACK", label: "Snacks" },
-  { key: "CUSTOM", label: "Custom" },
-];
+  { key: "BREAKFAST", label: "Breakfast" }, { key: "LUNCH", label: "Lunch" },
+  { key: "DINNER", label: "Dinner" }, { key: "SNACK", label: "Snacks" }, { key: "CUSTOM", label: "Custom" },
+] as const;
+const inputClass = "w-full rounded-xl border-0 bg-surface-muted px-3 py-2.5 text-base text-gray-900 focus:ring-2 focus:ring-brand-500";
+const actionClass = "min-h-11 rounded-xl bg-brand-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-brand-700 disabled:opacity-50";
 
-const DAY_MEAL_TYPES = [
-  { key: "BREAKFAST", label: "Breakfast", icon: "\u{1F305}" },
-  { key: "LUNCH", label: "Lunch", icon: "\u{2600}\u{FE0F}" },
-  { key: "DINNER", label: "Dinner", icon: "\u{1F319}" },
-  { key: "SNACK", label: "Snacks", icon: "\u{1F34E}" },
-  { key: "CUSTOM", label: "Custom", icon: "\u{2728}" },
-];
-
-function mealIcon(type: string) {
-  return DAY_MEAL_TYPES.find((m) => m.key === type)?.icon ?? "\u{1F37D}\u{FE0F}";
+type ReviewedItem = EstimateResponse["items"][number];
+function ReviewItem({ item, onQuantity, onRemove }: { item: ReviewedItem; onQuantity: (quantity: number) => void; onRemove: () => void }) {
+  const [quantity, setQuantity] = useState(String(item.quantity));
+  useEffect(() => setQuantity(String(item.quantity)), [item.quantity]);
+  return <div className="space-y-2 rounded-xl bg-surface-muted p-3">
+    <div className="flex items-start justify-between gap-2">
+      <div className="min-w-0 text-sm font-semibold text-gray-800">{item.description}</div>
+      <button type="button" onClick={onRemove} aria-label={`Remove ${item.description}`} className="min-h-11 shrink-0 rounded-lg px-3 text-sm font-medium text-red-600 hover:bg-red-50">Remove</button>
+    </div>
+    <label className="flex flex-wrap items-center gap-2 text-sm text-gray-600">
+      <span>Quantity ({item.unit || "portion"})</span>
+      <input aria-label={`Quantity for ${item.description}`} type="number" inputMode="decimal" required min="0.01" max="1000000" step="any" value={quantity}
+        onChange={(e) => { setQuantity(e.target.value); const amount = Number(e.target.value); if (Number.isFinite(amount) && amount > 0 && amount <= 1_000_000) onQuantity(amount); }}
+        className="w-28 rounded-lg border border-gray-200 bg-white px-3 py-2 text-base" />
+    </label>
+    <div className="text-sm tabular-nums text-gray-700">{Math.round(item.nutrients.kcal)} kcal · {item.nutrients.protein_g.toFixed(1)}P · {item.nutrients.carbs_g.toFixed(1)}C · {item.nutrients.fat_g.toFixed(1)}F</div>
+    <div className="text-xs text-gray-500">Estimated · {Math.round(item.confidence * 100)}% confidence. Changing the quantity scales this estimate.</div>
+    {item.assumptions.length > 0 && <p className="text-xs text-gray-500">{item.assumptions.join(" · ")}</p>}
+  </div>;
 }
 
-export function EstimateFromText({ date, defaultMealType = "DINNER", forceMode, onApply, onApplyDay }: Props) {
-  const [text, setText] = useState("");
-  const [mealType, setMealType] = useState(defaultMealType);
-  const [mealName, setMealName] = useState("");
+// Remount when scope changes: old account/date/mode state is never rendered under a new scope.
+export function EstimateFromText(props: EstimateFromTextProps) {
+  return <EstimateComposer key={`${props.userId ?? "no-drafts"}:${props.date}:${props.forceMode ?? "single"}`} {...props} />;
+}
 
-  // Single-meal state
-  const [result, setResult] = useState<EstimateResponse | null>(null);
-
-  // Full-day state
-  const [dayMeals, setDayMeals] = useState<DayMeal[]>([]);
-  const [unparsed, setUnparsed] = useState<string[]>([]);
-  const [dayNotes, setDayNotes] = useState("");
-  const [hasDayResult, setHasDayResult] = useState(false);
-
+function EstimateComposer({ date, userId, defaultMealType = "DINNER", forceMode = "single", onApply, onApplyDay }: EstimateFromTextProps) {
+  const initialMealType = MEALS.find((meal) => meal.key === defaultMealType)?.key ?? "DINNER";
+  const [draft, setDraft] = useState<MealDraft>(() => emptyMealDraft(initialMealType));
+  const [ready, setReady] = useState(false);
+  const [storageAvailable, setStorageAvailable] = useState(Boolean(userId));
+  const [restored, setRestored] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [isPending, startTransition] = useTransition();
-  const [isApplying, startApplying] = useTransition();
-
+  const [success, setSuccess] = useState<LogResult | null>(null);
+  const [successNote, setSuccessNote] = useState("");
+  const [isPending, startEstimate] = useTransition();
+  const [isApplying, startApply] = useTransition();
+  const [isUndoing, startUndo] = useTransition();
+  const lastStored = useRef("");
+  const saving = useRef(false);
+  const estimating = useRef(false);
+  const scope: DraftScope = { userId: userId ?? "", date, mode: forceMode };
   const isFullDay = forceMode === "fullday";
-  const charCount = text.length;
 
-  function resetAll() {
-    setText("");
-    setResult(null);
-    setDayMeals([]);
-    setUnparsed([]);
-    setDayNotes("");
-    setHasDayResult(false);
-    setMealName("");
+  useEffect(() => {
+    if (userId) pruneMealDrafts(userId);
+    const saved = userId ? readScopedDraft(scope, (value) => { const parsed = MealDraftSchema.safeParse(value); return parsed.success ? parsed.data : null; }) : null;
+    const next = saved ?? emptyMealDraft(initialMealType);
+    lastStored.current = JSON.stringify(next);
+    setDraft(next);
+    setRestored(Boolean(saved));
+    try { setStorageAvailable(Boolean(userId && window.localStorage)); } catch { setStorageAvailable(false); }
+    setReady(true);
+    const cleared = () => { setDraft(emptyMealDraft(initialMealType)); setReady(false); };
+    window.addEventListener(DRAFTS_CLEARED_EVENT, cleared);
+    return () => window.removeEventListener(DRAFTS_CLEARED_EVENT, cleared);
+    // This component is keyed by scope. Hydrate once before enabling editing or persistence.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    if (!ready || !userId) return;
+    const serialized = JSON.stringify(draft);
+    if (serialized === lastStored.current) return;
+    lastStored.current = serialized;
+    if (!draft.text && !draft.result && !draft.hasDayResult) removeScopedDraft(scope);
+    else setStorageAvailable(writeScopedDraft(scope, draft));
+    // Scope is fixed for this keyed instance.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [draft, ready, userId]);
+
+  function update(patch: Partial<MealDraft>) { setDraft((previous) => ({ ...previous, ...patch })); setError(null); }
+  function discard() {
+    if (draft.requestId && !window.confirm("A save may already have reached your account. Discard this draft? Check your history before adding it again.")) return;
+    removeScopedDraft(scope);
+    setDraft(emptyMealDraft(initialMealType));
+    setRestored(false);
     setError(null);
   }
 
-  // --- Estimate (single or day) ---
-  function handleEstimate() {
+  function estimate() {
+    if (estimating.current) return;
+    estimating.current = true;
     setError(null);
-    setResult(null);
-    setDayMeals([]);
-    setHasDayResult(false);
-
-    startTransition(async () => {
+    setSuccess(null);
+    startEstimate(async () => {
       try {
+        const response = await fetch(isFullDay ? "/api/estimate-day" : "/api/estimate", {
+          method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text: draft.text }),
+        });
+        if (!response.ok) { setError("Could not estimate this meal. Your text is kept; try again or use saved foods / manual entry."); return; }
         if (isFullDay) {
-          const res = await fetch("/api/estimate-day", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ text }),
-          });
-          if (!res.ok) {
-            const data = await res.json().catch(() => ({}));
-            setError(data?.error ?? "Failed to parse your day. Try again.");
-            return;
-          }
-          const data: DayEstimateResponse = await res.json();
-          setDayMeals(data.meals);
-          setUnparsed(data.unparsed);
-          setDayNotes(data.notes);
-          setHasDayResult(true);
+          const result: DayEstimateResponse = await response.json();
+          update({ dayMeals: result.meals, unparsed: result.unparsed, dayNotes: result.notes, hasDayResult: true, result: null, requestId: null });
         } else {
-          const res = await fetch("/api/estimate", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ text }),
-          });
-          if (!res.ok) {
-            const data = await res.json().catch(() => ({}));
-            setError(data?.error ?? "Estimation failed. Is LLM_ENABLED=true?");
-            return;
-          }
-          setResult(await res.json());
+          const result: EstimateResponse = await response.json();
+          update({ result, hasDayResult: false, requestId: null });
         }
-      } catch {
-        setError("Failed to connect. Check your network.");
-      }
+      } catch { setError("Could not connect. Your text is kept; reconnect and try again."); }
+      finally { estimating.current = false; }
     });
   }
 
-  // --- Save single meal ---
-  function handleApply() {
-    if (!result) return;
-    startApplying(async () => {
-      await onApply({ date, mealType, mealName: mealName || undefined, estimate: result, sourceText: text });
-      resetAll();
+  function save(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (saving.current || (isFullDay ? draft.dayMeals.length === 0 : !draft.result?.items.length)) return;
+    saving.current = true;
+    setError(null);
+    const attempted = { ...draft, requestId: draft.requestId ?? crypto.randomUUID() };
+    // Persist the attempt before sending it, so a lost response can be retried safely after reload.
+    setDraft(attempted);
+    if (userId) setStorageAvailable(writeScopedDraft(scope, attempted));
+    startApply(async () => {
+      try {
+        const result = isFullDay
+          ? await onApplyDay({ date, meals: attempted.dayMeals, sourceText: attempted.text, requestId: attempted.requestId, expectedUserId: userId })
+          : await onApply({ date, mealType: attempted.mealType, mealName: attempted.mealName || undefined, estimate: attempted.result!, sourceText: attempted.text, requestId: attempted.requestId, expectedUserId: userId });
+        if (result.undone) {
+          update({ requestId: null });
+          setError("That earlier save was undone. Review this meal, then save again if you want to add it.");
+          return;
+        }
+        removeScopedDraft(scope);
+        setDraft(emptyMealDraft(initialMealType));
+        setRestored(false);
+        setSuccess(result);
+        setSuccessNote(attempted.unparsed.length ? `${attempted.unparsed.length} unrecognized item(s) were left unlogged. Add those with saved foods or manual entry.` : "");
+      } catch { setError("Could not confirm the save. Your reviewed meal is kept. Retry save to check safely without adding duplicates."); }
+      finally { saving.current = false; }
     });
   }
 
-  // --- Save full day ---
-  function handleApplyDay() {
-    if (dayMeals.length === 0) return;
-    startApplying(async () => {
-      await onApplyDay({ date, meals: dayMeals, sourceText: text });
-      resetAll();
+  function undo() {
+    if (!success) return;
+    setError(null);
+    startUndo(async () => {
+      try { await undoLogBatch({ batchId: success.batchId, expectedUserId: userId }); setSuccess(null); setSuccessNote("Meal addition undone."); }
+      catch { setError("Could not undo. Try Undo again; your saved meal is still visible in history."); }
     });
   }
 
-  // --- Day review helpers ---
-  function removeItem(mealIdx: number, itemIdx: number) {
-    setDayMeals((prev) => {
-      const updated = prev.map((m, i) => {
-        if (i !== mealIdx) return m;
-        return { ...m, items: m.items.filter((_, j) => j !== itemIdx) };
-      });
-      return updated.filter((m) => m.items.length > 0);
-    });
-  }
+  const items = isFullDay ? draft.dayMeals.flatMap((meal) => meal.items) : draft.result?.items ?? [];
+  const totalKcal = items.reduce((sum, item) => sum + item.nutrients.kcal, 0);
+  const locked = Boolean(draft.requestId) || isPending || isApplying;
+  if (!ready) return <div className="py-5 text-sm text-gray-500" role="status">Opening your meal draft…</div>;
 
-  function changeDayMealType(mealIdx: number, newType: string) {
-    setDayMeals((prev) =>
-      prev.map((m, i) =>
-        i === mealIdx ? { ...m, mealType: newType as DayMeal["mealType"] } : m
-      )
-    );
-  }
+  return <div className="space-y-3">
+    {restored && <p className="text-xs text-gray-500" role="status">Draft restored on this device.</p>}
+    {error && <p role="alert" className="rounded-xl bg-red-50 p-3 text-sm text-red-700">{error}</p>}
+    {(success || successNote) && <div role="status" className="rounded-xl bg-brand-50 p-3 text-sm text-brand-800">
+      {success && <div className="flex flex-wrap items-center justify-between gap-2"><span>{success.entryCount} item{success.entryCount === 1 ? "" : "s"} saved.</span><button type="button" onClick={undo} disabled={isUndoing} className="min-h-11 rounded-lg px-3 font-bold underline disabled:opacity-50">{isUndoing ? "Undoing…" : "Undo"}</button></div>}
+      {successNote && <p>{successNote}</p>}
+    </div>}
 
-  function assignUnparsed(item: string, toMealType: string) {
-    setUnparsed((prev) => prev.filter((u) => u !== item));
-    const existingIdx = dayMeals.findIndex((m) => m.mealType === toMealType);
-    const newItem = {
-      description: item,
-      quantity: 100,
-      unit: "g",
-      nutrients: { kcal: 100, protein_g: 5, carbs_g: 10, fat_g: 5 },
-      confidence: 0.3,
-      assumptions: ["rough estimate \u2014 could not parse precisely"],
-    };
-    if (existingIdx >= 0) {
-      setDayMeals((prev) =>
-        prev.map((m, i) =>
-          i === existingIdx ? { ...m, items: [...m.items, newItem] } : m
-        )
-      );
-    } else {
-      setDayMeals((prev) => [
-        ...prev,
-        {
-          mealType: toMealType as DayMeal["mealType"],
-          mealName: null,
-          detectedFrom: "manually assigned",
-          items: [newItem],
-        },
-      ]);
-    }
-  }
+    <form onSubmit={save} className="space-y-3">
+      <fieldset disabled={locked} className="space-y-3 disabled:opacity-70">
+        {!isFullDay && <div className="grid gap-3 sm:grid-cols-2">
+          <label className="grid gap-1 text-sm"><span>Meal</span><select value={draft.mealType} onChange={(e) => update({ mealType: e.target.value as MealDraft["mealType"] })} className={inputClass}>{MEALS.map((meal) => <option key={meal.key} value={meal.key}>{meal.label}</option>)}</select></label>
+          {draft.mealType === "CUSTOM" && <label className="grid gap-1 text-sm"><span>Meal name</span><input value={draft.mealName} maxLength={200} onChange={(e) => update({ mealName: e.target.value })} className={inputClass} /></label>}
+        </div>}
+        {!draft.hasDayResult && !draft.result && <>
+          <label className="grid gap-1 text-sm"><span>{isFullDay ? "Everything you ate today" : "What did you eat?"}</span><textarea value={draft.text} maxLength={isFullDay ? 3000 : 2000} onChange={(e) => update({ text: e.target.value })} placeholder={isFullDay ? "Breakfast: eggs and toast. Lunch: dal and rice. Dinner: chicken and salad." : "e.g. 2 scrambled eggs, 2 slices of toast with butter"} rows={isFullDay ? 4 : 3} className={inputClass} /></label>
+          <p className="text-xs text-gray-500">You can use your keyboard’s microphone to dictate. Review the text before estimating.</p>
+          <button type="button" onClick={estimate} disabled={draft.text.trim().length < (isFullDay ? 10 : 1)} className={actionClass}>{isPending ? "Estimating…" : "Estimate and review"}</button>
+        </>}
 
-  // --- Computed totals ---
-  const singleTotals = result?.items.reduce(
-    (acc, item) => ({
-      kcal: acc.kcal + item.nutrients.kcal,
-      protein_g: acc.protein_g + item.nutrients.protein_g,
-      carbs_g: acc.carbs_g + item.nutrients.carbs_g,
-      fat_g: acc.fat_g + item.nutrients.fat_g,
-    }),
-    { kcal: 0, protein_g: 0, carbs_g: 0, fat_g: 0 }
-  );
+        {draft.result && !isFullDay && <div className="space-y-3">
+          <p className="text-sm font-semibold">Review quantities before saving</p>
+          {draft.result.items.map((item, index) => <ReviewItem key={index} item={item}
+            onQuantity={(quantity) => update({ result: { ...draft.result!, items: draft.result!.items.map((value, i) => i === index ? scaleEstimatedItem(value, quantity) : value) } })}
+            onRemove={() => update({ result: { ...draft.result!, items: draft.result!.items.filter((_, i) => i !== index) } })} />)}
+          {draft.result.notes.length > 0 && <p className="text-xs text-gray-500">{draft.result.notes.join(" · ")}</p>}
+        </div>}
 
-  const dayTotals = dayMeals.reduce(
-    (acc, m) => {
-      for (const item of m.items) {
-        acc.kcal += item.nutrients.kcal;
-        acc.protein += item.nutrients.protein_g;
-        acc.carbs += item.nutrients.carbs_g;
-        acc.fat += item.nutrients.fat_g;
-      }
-      return acc;
-    },
-    { kcal: 0, protein: 0, carbs: 0, fat: 0 }
-  );
-
-  const totalDayItems = dayMeals.reduce((s, m) => s + m.items.length, 0);
-
-  return (
-    <div className="grid gap-3">
-      {/* Meal type selector — only for single meal mode */}
-      {!isFullDay && !hasDayResult && (
-        <div className="grid gap-2 md:grid-cols-2">
-          <label className="grid gap-1 text-sm">
-            <div className="text-xs font-medium text-gray-500">Meal</div>
-            <select
-              value={mealType}
-              onChange={(e) => setMealType(e.target.value)}
-              className="rounded-xl border-0 bg-surface-muted px-3 py-2.5 text-gray-900 focus:ring-2 focus:ring-brand-500"
-            >
-              {MEALS.map((m) => (
-                <option key={m.key} value={m.key}>{m.label}</option>
-              ))}
-            </select>
-          </label>
-          {mealType === "CUSTOM" && (
-            <label className="grid gap-1 text-sm">
-              <div className="text-xs font-medium text-gray-500">Custom name</div>
-              <input
-                value={mealName}
-                onChange={(e) => setMealName(e.target.value)}
-                placeholder="e.g., Post-workout"
-                className="rounded-xl border-0 bg-surface-muted px-3 py-2.5 placeholder-gray-400 focus:ring-2 focus:ring-brand-500"
-              />
-            </label>
-          )}
-        </div>
-      )}
-
-      {/* Text input */}
-      {!hasDayResult && !result && (
-        <>
-          <label className="grid gap-1 text-sm">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-medium text-gray-500">
-                {isFullDay ? "Tell me everything you ate today" : "What did you eat?"}
-              </span>
-              {isFullDay && (
-                <span className={`text-[10px] tabular-nums ${charCount > 2800 ? "text-red-500" : "text-gray-300"}`}>
-                  {charCount}/3000
-                </span>
-              )}
-            </div>
-            <textarea
-              value={text}
-              onChange={(e) => setText(isFullDay ? e.target.value.slice(0, 3000) : e.target.value)}
-              placeholder={
-                isFullDay
-                  ? "Breakfast: 2 eggs, toast, chai. Lunch: chicken burrito bowl. Snack: protein shake after gym. Dinner: dal, rice, salad."
-                  : "e.g., 2 scrambled eggs, 2 slices of toast with butter, 1 banana"
-              }
-              rows={isFullDay ? 4 : 3}
-              className="rounded-xl border-0 bg-surface-muted px-3 py-2.5 placeholder-gray-400 resize-none focus:ring-2 focus:ring-brand-500 text-sm"
-            />
-          </label>
-
-          <button
-            onClick={handleEstimate}
-            disabled={isPending || text.trim().length < (isFullDay ? 10 : 1)}
-            className="rounded-xl bg-brand-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-brand-700 disabled:opacity-50 active:scale-[0.98] transition-all"
-          >
-            {isPending
-              ? isFullDay ? "Parsing your day\u2026" : "Estimating\u2026"
-              : isFullDay ? "Parse & organize my day" : "Estimate nutrition"}
-          </button>
-        </>
-      )}
-
-      {/* Error */}
-      {error && (
-        <div className="rounded-xl bg-red-50 px-4 py-3 text-sm text-red-600">{error}</div>
-      )}
-
-      {/* ========== SINGLE MEAL RESULT ========== */}
-      {result && !isFullDay && (
-        <div className="space-y-2">
-          <div className="text-xs font-bold uppercase tracking-wide text-gray-400">Here's what I found</div>
-          {result.items.map((item, i) => (
-            <div key={i} className="rounded-xl bg-surface-muted p-3 text-sm">
-              <div className="flex items-center gap-2">
-                <span className="font-semibold text-gray-800">{item.description}</span>
-                <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-bold ${
-                  item.confidence >= 0.8 ? "bg-green-100 text-green-700" :
-                  item.confidence >= 0.5 ? "bg-amber-100 text-amber-700" :
-                  "bg-red-100 text-red-600"
-                }`}>
-                  {Math.round(item.confidence * 100)}%
-                </span>
-              </div>
-              <div className="text-xs text-gray-500 mt-0.5">
-                {item.quantity} {item.unit}
-              </div>
-              <div className="mt-1 text-xs tabular-nums text-gray-700">
-                {Math.round(item.nutrients.kcal)} kcal · {item.nutrients.protein_g.toFixed(1)}P / {item.nutrients.carbs_g.toFixed(1)}C / {item.nutrients.fat_g.toFixed(1)}F
-              </div>
-              {item.assumptions.length > 0 && (
-                <div className="mt-1.5 rounded-lg bg-white/60 px-2 py-1 text-[11px] text-gray-500">
-                  {item.assumptions.join(" · ")}
-                </div>
-              )}
-            </div>
-          ))}
-
-          {singleTotals && (
-            <div className="rounded-xl bg-brand-50 px-4 py-2.5 text-sm">
-              <span className="text-brand-700 font-semibold tabular-nums">
-                {Math.round(singleTotals.kcal)} kcal \u00B7 {singleTotals.protein_g.toFixed(1)}P / {singleTotals.carbs_g.toFixed(1)}C / {singleTotals.fat_g.toFixed(1)}F
-              </span>
-            </div>
-          )}
-
-          <button
-            onClick={handleApply}
-            disabled={isApplying}
-            className="w-full rounded-xl bg-brand-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-brand-700 active:scale-[0.98] disabled:opacity-50 transition-all"
-          >
-            {isApplying ? "Saving\u2026" : "Save meal"}
-          </button>
-        </div>
-      )}
-
-      {/* ========== FULL DAY REVIEW ========== */}
-      {hasDayResult && (
-        <div className="space-y-4">
-          <div className="text-xs font-bold uppercase tracking-wide text-gray-400">Here's what I understood</div>
-          {/* Day summary */}
-          <div className="rounded-xl bg-brand-50 border border-brand-100 px-4 py-3">
-            <div className="flex items-center justify-between">
-              <span className="text-sm font-semibold text-brand-700">
-                {dayMeals.length} meals \u00B7 {totalDayItems} items
-              </span>
-              <span className="text-sm font-bold tabular-nums text-brand-800">
-                ~{Math.round(dayTotals.kcal)} kcal
-              </span>
-            </div>
-            <div className="mt-1 text-xs tabular-nums text-brand-600">
-              {Math.round(dayTotals.protein)}P \u00B7 {Math.round(dayTotals.carbs)}C \u00B7 {Math.round(dayTotals.fat)}F
-            </div>
-          </div>
-
-          {/* Meal groups */}
-          {dayMeals.map((meal, mealIdx) => {
-            const mealKcal = meal.items.reduce((s, i) => s + i.nutrients.kcal, 0);
-            return (
-              <div key={mealIdx} className="rounded-xl border border-gray-100 overflow-hidden">
-                <div className="flex items-center justify-between bg-surface-muted px-3 py-2">
-                  <div className="flex items-center gap-2">
-                    <span className="text-base">{mealIcon(meal.mealType)}</span>
-                    <select
-                      value={meal.mealType}
-                      onChange={(e) => changeDayMealType(mealIdx, e.target.value)}
-                      className="bg-transparent text-sm font-bold text-gray-800 border-0 p-0 focus:ring-0 cursor-pointer"
-                    >
-                      {DAY_MEAL_TYPES.map((t) => (
-                        <option key={t.key} value={t.key}>{t.label}</option>
-                      ))}
-                    </select>
-                  </div>
-                  <span className="text-xs font-semibold tabular-nums text-gray-500">
-                    {Math.round(mealKcal)} kcal
-                  </span>
-                </div>
-
-                <div className="divide-y divide-gray-50">
-                  {meal.items.map((item, itemIdx) => (
-                    <div key={itemIdx} className="flex items-start gap-2 px-3 py-2.5">
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-1.5">
-                          <span className="text-sm font-medium text-gray-800 truncate">{item.description}</span>
-                          <span className={`shrink-0 rounded-full px-1.5 py-0.5 text-[9px] font-bold ${
-                            item.confidence >= 0.8 ? "bg-green-100 text-green-700" :
-                            item.confidence >= 0.5 ? "bg-amber-100 text-amber-700" :
-                            "bg-red-100 text-red-600"
-                          }`}>
-                            {Math.round(item.confidence * 100)}%
-                          </span>
-                        </div>
-                        <div className="text-xs tabular-nums text-gray-500 mt-0.5">
-                          {Math.round(item.quantity)}g · {Math.round(item.nutrients.kcal)} cal · {item.nutrients.protein_g.toFixed(1)}P {item.nutrients.carbs_g.toFixed(1)}C {item.nutrients.fat_g.toFixed(1)}F
-                        </div>
-                        {item.assumptions.length > 0 && (
-                          <div className="mt-1 rounded bg-white/60 px-1.5 py-0.5 text-[10px] text-gray-400 truncate" title={item.assumptions.join("; ")}>
-                            {item.assumptions[0]}
-                          </div>
-                        )}
-                      </div>
-                      <button
-                        onClick={() => removeItem(mealIdx, itemIdx)}
-                        className="shrink-0 rounded-lg p-1 text-gray-300 hover:bg-red-50 hover:text-red-400 transition-colors mt-0.5"
-                      >
-                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                        </svg>
-                      </button>
-                    </div>
-                  ))}
-                </div>
-
-                {meal.detectedFrom && (
-                  <div className="px-3 py-1.5 bg-surface-muted text-[10px] text-gray-400">
-                    Detected from: {meal.detectedFrom}
-                  </div>
-                )}
-              </div>
-            );
-          })}
-
-          {/* Unparsed items */}
-          {unparsed.length > 0 && (
-            <div className="rounded-xl border border-orange-200 bg-orange-50 p-3">
-              <div className="text-xs font-medium text-orange-700 mb-2">Couldn't place these \u2014 assign to a meal:</div>
-              {unparsed.map((u, i) => (
-                <div key={i} className="flex items-center gap-2 mt-1.5">
-                  <span className="text-sm text-orange-800 flex-1 truncate">{u}</span>
-                  <select
-                    defaultValue=""
-                    onChange={(e) => { if (e.target.value) assignUnparsed(u, e.target.value); }}
-                    className="rounded-lg border-0 bg-white px-2 py-1 text-xs text-gray-700 focus:ring-1 focus:ring-brand-500"
-                  >
-                    <option value="" disabled>Assign \u2192</option>
-                    {DAY_MEAL_TYPES.map((t) => (
-                      <option key={t.key} value={t.key}>{t.label}</option>
-                    ))}
-                  </select>
-                </div>
-              ))}
-            </div>
-          )}
-
-          {dayNotes && <div className="text-[11px] text-gray-400 px-1">{dayNotes}</div>}
-
-          {/* Actions */}
-          <div className="flex gap-3">
-            <button
-              onClick={resetAll}
-              className="flex-1 rounded-xl bg-gray-100 px-4 py-2.5 text-sm font-bold text-gray-600 hover:bg-gray-200 transition-all"
-            >
-              Start over
-            </button>
-            <button
-              onClick={handleApplyDay}
-              disabled={isApplying || dayMeals.length === 0}
-              className="flex-1 rounded-xl bg-brand-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-brand-700 disabled:opacity-60 active:scale-[0.98] transition-all"
-            >
-              {isApplying ? "Saving\u2026" : `Log all ${totalDayItems} items`}
-            </button>
-          </div>
-        </div>
-      )}
-    </div>
-  );
+        {draft.hasDayResult && <div className="space-y-3">
+          <p className="text-sm font-semibold">Review your day</p>
+          {draft.dayMeals.map((meal, mealIndex) => <div key={mealIndex} className="space-y-2 rounded-xl border border-gray-200 p-3">
+            <label className="grid gap-1 text-sm"><span>Meal</span><select value={meal.mealType} onChange={(e) => update({ dayMeals: draft.dayMeals.map((value, i) => i === mealIndex ? { ...value, mealType: e.target.value as DayMeal["mealType"] } : value) })} className={inputClass}>{MEALS.map((value) => <option key={value.key} value={value.key}>{value.label}</option>)}</select></label>
+            {meal.items.map((item, itemIndex) => <ReviewItem key={itemIndex} item={item}
+              onQuantity={(quantity) => update({ dayMeals: draft.dayMeals.map((value, mi) => mi === mealIndex ? { ...value, items: value.items.map((entry, ei) => ei === itemIndex ? scaleEstimatedItem(entry, quantity) : entry) } : value) })}
+              onRemove={() => update({ dayMeals: draft.dayMeals.map((value, mi) => mi === mealIndex ? { ...value, items: value.items.filter((_, ei) => ei !== itemIndex) } : value).filter((value) => value.items.length > 0) })} />)}
+          </div>)}
+          {draft.unparsed.length > 0 && <div className="rounded-xl bg-orange-50 p-3 text-sm text-orange-800"><p className="font-semibold">These items will not be logged</p><ul className="my-2 list-disc pl-5">{draft.unparsed.map((value, index) => <li key={index}>{value}</li>)}</ul><p>Add them with saved foods or manual entry when you know their nutrition.</p></div>}
+          {draft.dayNotes && <p className="text-xs text-gray-500">{draft.dayNotes}</p>}
+        </div>}
+      </fieldset>
+      {(draft.result || draft.hasDayResult) && <>
+        <p className="rounded-xl bg-brand-50 p-3 text-sm font-semibold text-brand-800">{items.length} items · approximately {Math.round(totalKcal)} kcal</p>
+        {draft.requestId && <p className="text-xs text-gray-600">A save was attempted. Retry this unchanged meal to confirm it safely.</p>}
+        {items.length > 100 && <p role="alert" className="text-sm text-red-700">Save up to 100 items at a time. Remove some items before saving.</p>}
+        <button type="submit" disabled={isApplying || items.length === 0 || items.length > 100} className={`${actionClass} w-full`}>{isApplying ? "Saving…" : draft.requestId ? "Retry save safely" : isFullDay ? "Save reviewed day" : "Save reviewed meal"}</button>
+      </>}
+    </form>
+    <DraftPrivacy available={storageAvailable} disabled={isPending || isApplying} onDiscard={discard} />
+  </div>;
 }

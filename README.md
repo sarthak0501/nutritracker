@@ -41,18 +41,18 @@ Most nutrition apps are calorie calculators. NutriTracker is an **AI nutrition c
 
 | Area | What you get |
 |---|---|
-| **Logging** | AI text estimation, manual entry, barcode + Open Food Facts, copy-yesterday, frequent-foods |
+| **Logging** | Named whole-meal presets, recent meals, portion adjustment, AI text estimation, manual entry, copy-yesterday, retry-safe saves and Undo |
 | **Health profile** | Allergies, dietary restrictions, health conditions — AI honours them in all suggestions |
 | **Targets** | Calories, protein, carbs, fat, fiber. Presets for lose/maintain/build/health |
 | **Water & workouts** | Built-in trackers; workouts get AI calorie estimates |
-| **Buddies** | Shared daily feed, reactions (👍 👎 🔥 💪), leaderboard |
+| **Buddies** | Shared daily feed, recipient-reviewed meal proposals, reactions, leaderboard and optional cooperative weekly check-in |
 | **Insights** | Weekly summaries, monthly review, weight & calorie trends, heatmap history |
 
 ## Tech stack
 
 - **Next.js 15** (App Router, React Server Components)
 - **Prisma + Neon Postgres** (serverless PostgreSQL)
-- **NextAuth 5** (username/password, JWT sessions)
+- **Signed JWT sessions** (username/password, HTTP-only cookies)
 - **Tailwind CSS** + **Recharts**
 - **Anthropic or OpenAI** (pluggable LLM — pick either)
 
@@ -230,6 +230,9 @@ Delete those files and their references in `app/page.tsx` if you want to strip t
 npm run dev                 # start dev server
 npm run build               # production build (runs prisma generate first)
 npm run lint                # eslint
+npm run typecheck           # TypeScript
+npm test                    # pure regression tests
+npm run test:integration    # isolated local PostgreSQL (see tests/README.md)
 npm run prisma:studio       # Prisma Studio GUI for your DB
 ```
 
@@ -241,7 +244,7 @@ npx prisma db push          # applies to DB without migrations (simpler on Neon)
 npx prisma generate         # regenerates client
 ```
 
-This project deliberately uses `prisma db push` rather than `prisma migrate dev` — migrations can drift on Neon's branching model, and `db push` keeps schema and DB in sync without fuss for a small-team project.
+The original database was created with `prisma db push` and has no baseline migration history. Use `db push` only for a new or disposable development database. For an existing deployment, back up first and apply a reviewed additive SQL rollout before the matching app deploy. See [daily logging rollout and rollback](docs/daily-logging-rollout.md). Never reset an existing database to adopt migration history.
 
 ---
 
@@ -253,7 +256,7 @@ Good places to start if you want to extend the app:
 |---|---|
 | A new page | `app/<route>/page.tsx` + add to `components/Nav.tsx` |
 | A new AI feature | `lib/llm-client.ts` (provider-agnostic wrapper) + a new `app/api/*/route.ts` |
-| Schema changes | `prisma/schema.prisma` → `prisma db push` |
+| Schema changes | `prisma/schema.prisma` + reviewed SQL in `prisma/rollouts/` |
 | Charts / visualisations | Use Recharts; existing examples in `components/TrendsChart.tsx`, `CalendarHeatmap.tsx` |
 | Meal grading logic | `lib/meal-scoring.ts` |
 | Social features | `app/actions/reactions.ts`, `app/actions/buddy.ts`, `components/BuddyTodayFeed.tsx` |
@@ -266,7 +269,9 @@ The LLM client is provider-agnostic and reads config from env, so you can swap C
 
 - All health data (allergies, conditions, restrictions) lives only in your Neon database — not shared with any third party beyond the LLM call you configured.
 - LLM prompts include profile context for better suggestions; your provider's data-retention policy applies to those calls. Anthropic and OpenAI both offer options to disable training on API usage.
-- Food logs are personal to each user and their approved buddies.
+- Food logs are personal to each user and their approved buddies. Sharing a meal creates a proposal; the recipient chooses their own portion and accepts before entries are added.
+- Unfinished meal drafts are saved on this device for up to 24 hours and cleared on logout or explicit discard. Storage is scoped to account, date and entry mode. No offline save queue is enabled.
+- Known meals and manual entries do not call an AI provider. This release does not change the configured model or provider.
 
 ---
 

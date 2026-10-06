@@ -5,6 +5,9 @@ import { WeeklyChallenge } from "@/components/WeeklyChallenge";
 import { sendBuddyRequest, respondToBuddyRequest, removeBuddy } from "@/app/actions/buddy";
 import { getChallengeData } from "@/lib/challenge";
 import { todayIsoDate } from "@/lib/dates";
+import { getMealLibrary } from "@/lib/meal-library";
+import { SharedMeals } from "@/components/SharedMeals";
+import { CooperativeCheckIn } from "@/components/CooperativeCheckIn";
 
 function AvatarBadge({ name, size = "md" }: { name: string; size?: "sm" | "md" }) {
   const initial = (name ?? "?")[0].toUpperCase();
@@ -22,7 +25,7 @@ export default async function BuddyPage() {
   const user = await requireSession();
   const today = todayIsoDate();
 
-  const [sent, received] = await Promise.all([
+  const [sent, received, library] = await Promise.all([
     prisma.buddyRelationship.findMany({
       where: { requesterId: user.id },
       include: { addressee: { select: { id: true, username: true } } },
@@ -31,6 +34,7 @@ export default async function BuddyPage() {
       where: { addresseeId: user.id },
       include: { requester: { select: { id: true, username: true } } },
     }),
+    getMealLibrary(user.id, today),
   ]);
 
   const accepted = [
@@ -57,6 +61,9 @@ export default async function BuddyPage() {
         <h1 className="text-xl font-bold">Accountability Buddies</h1>
         <p className="text-sm text-gray-500 mt-1">Track together, stay motivated, celebrate wins</p>
       </div>
+
+      <SharedMeals userId={user.id} date={today} pending={library.pending} sent={library.sent} />
+      <CooperativeCheckIn userId={user.id} checkIn={library.checkIn} buddyName={library.buddy?.username} />
 
       {/* Weekly challenge — shown at top when buddy is connected */}
       {buddy && challengeData && (
@@ -167,6 +174,7 @@ export default async function BuddyPage() {
         <form action={sendBuddyRequest} className="flex gap-2">
           <input
             name="username"
+            aria-label="Buddy username"
             placeholder="Enter their username"
             className="flex-1 rounded-xl border-0 bg-surface-muted px-4 py-2.5 text-sm placeholder-gray-400 focus:ring-2 focus:ring-brand-500"
           />

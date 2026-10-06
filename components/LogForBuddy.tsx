@@ -1,153 +1,66 @@
 "use client";
 
-import { useState, useTransition } from "react";
-import type { EstimateResponse } from "@/lib/llm";
-import { copyMealsToBuddy, applyEstimatedMealForBuddy } from "@/app/actions/logging";
+import { useId, useRef, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
+import { proposeSharedMeal } from "@/app/actions/meals";
+import { MealSelectionEditor, mealControl, useMealRequestId, validMealPortion } from "@/components/MealLibrary";
+import type { LibraryMeal } from "@/lib/meal-types";
 
-const MEALS = [
-  { key: "BREAKFAST", label: "🌅 Breakfast" },
-  { key: "LUNCH", label: "☀️ Lunch" },
-  { key: "DINNER", label: "🌙 Dinner" },
-  { key: "SNACK", label: "🍎 Snacks" },
-];
+type LogForBuddyProps = { userId: string; buddyId: string; buddyName: string; date: string; meals: LibraryMeal[] };
 
-export type UserMealSummary = {
-  mealType: string;
-  label: string;
-  icon: string;
-  itemCount: number;
-  kcal: number;
-};
+export function LogForBuddy(props: LogForBuddyProps) {
+  return <LogForBuddyForAccount key={props.userId} {...props} />;
+}
 
-export function LogForBuddy({
-  buddyName,
-  date,
-  userMeals,
-}: {
-  buddyName: string;
-  date: string;
-  userMeals: UserMealSummary[];
-}) {
-  const [text, setText] = useState("");
-  const [mealType, setMealType] = useState("LUNCH");
-  const [copying, startCopy] = useTransition();
-  const [logging, startLog] = useTransition();
+function LogForBuddyForAccount({ userId, buddyId, buddyName, date, meals }: LogForBuddyProps) {
+  const router = useRouter();
+  const selectId = useId();
+  const [selectedMeal, setSelectedMeal] = useState<LibraryMeal | null>(null);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [multiplier, setMultiplier] = useState("1");
   const [error, setError] = useState<string | null>(null);
-  const [toast, setToast] = useState<string | null>(null);
-
-  function showToast(msg: string) {
-    setToast(msg);
-    setTimeout(() => setToast(null), 2500);
-  }
-
-  function handleCopyMealType(mt: string) {
-    startCopy(async () => {
-      await copyMealsToBuddy({ date, mealType: mt });
-      showToast(`Copied to ${buddyName}`);
-    });
-  }
-
-  function handleCopyAll() {
-    startCopy(async () => {
-      await copyMealsToBuddy({ date });
-      showToast(`All meals copied to ${buddyName}`);
-    });
-  }
-
-  function handleLogForBuddy() {
-    if (!text.trim()) return;
-    setError(null);
-    startLog(async () => {
-      try {
-        const res = await fetch("/api/estimate", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ text: text.trim() }),
-        });
-        if (!res.ok) throw new Error("Estimation failed");
-        const estimate: EstimateResponse = await res.json();
-        await applyEstimatedMealForBuddy({ date, mealType, estimate, sourceText: text.trim() });
-        setText("");
-        showToast(`Logged for ${buddyName}`);
-      } catch {
-        setError("Failed to log — try again");
-      }
-    });
-  }
+  const [sent, setSent] = useState(false);
+  const [attempted, setAttempted] = useState(false);
+  const [pending, startTransition] = useTransition();
+  const inFlight = useRef(false);
+  const attemptedProposal = useRef<Parameters<typeof proposeSharedMeal>[0] | null>(null);
+  const intent = useMealRequestId();
 
   return (
-    <div className="mt-3 pt-3 border-t border-white/40 space-y-3">
-      <div className="text-xs font-bold text-gray-500 uppercase tracking-wide">Log for {buddyName}</div>
-
-      {/* Copy my meals */}
-      {userMeals.length > 0 && (
-        <div className="space-y-2">
-          <div className="text-xs text-gray-500">Copy your meals:</div>
-          <div className="flex flex-wrap gap-2">
-            {userMeals.map((m) => (
-              <button
-                key={m.mealType}
-                type="button"
-                onClick={() => handleCopyMealType(m.mealType)}
-                disabled={copying || logging}
-                className="inline-flex items-center gap-1.5 rounded-xl bg-white/80 border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-white disabled:opacity-50 transition-colors shadow-sm"
-              >
-                <span>{m.icon}</span>
-                <span>{m.label}</span>
-                <span className="text-gray-400 tabular-nums">{Math.round(m.kcal)} kcal</span>
-              </button>
-            ))}
-            {userMeals.length > 1 && (
-              <button
-                type="button"
-                onClick={handleCopyAll}
-                disabled={copying || logging}
-                className="inline-flex items-center gap-1 rounded-xl bg-purple-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-purple-700 disabled:opacity-50 transition-colors"
-              >
-                Copy all
-              </button>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* Log a different meal */}
-      <div className="space-y-1.5">
-        <div className="text-xs text-gray-500">Log something different:</div>
-        <div className="flex gap-2">
-          <input
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && !logging && handleLogForBuddy()}
-            placeholder={`What did ${buddyName} eat?`}
-            className="flex-1 min-w-0 rounded-xl border-0 bg-white/80 px-3 py-2 text-sm placeholder-gray-400 focus:ring-2 focus:ring-purple-400 shadow-sm"
-          />
-          <select
-            value={mealType}
-            onChange={(e) => setMealType(e.target.value)}
-            className="rounded-xl border-0 bg-white/80 px-2 py-2 text-xs text-gray-700 focus:ring-2 focus:ring-purple-400 shadow-sm flex-shrink-0"
-          >
-            {MEALS.map((m) => (
-              <option key={m.key} value={m.key}>{m.label}</option>
-            ))}
-          </select>
-          <button
-            type="button"
-            onClick={handleLogForBuddy}
-            disabled={logging || copying || !text.trim()}
-            className="rounded-xl bg-purple-600 px-3 py-2 text-xs font-bold text-white hover:bg-purple-700 disabled:opacity-50 transition-all active:scale-95 flex-shrink-0"
-          >
-            {logging ? "…" : "Log"}
-          </button>
-        </div>
+    <div className="mt-3 space-y-3 border-t border-purple-100 pt-3">
+      <div>
+        <h3 className="text-sm font-bold text-gray-800">Share a meal with {buddyName}</h3>
+        <p className="mt-1 text-xs text-gray-600">They choose their own portion and accept before anything goes into their log.</p>
       </div>
-
-      {error && <div className="text-xs text-red-500">{error}</div>}
-      {toast && (
-        <div className="inline-flex items-center gap-1 rounded-full bg-green-50 border border-green-200 px-3 py-1 text-xs font-medium text-green-700">
-          ✓ {toast}
-        </div>
-      )}
+      {meals.length === 0 ? <p className="text-xs text-gray-500">Log a meal first, then you can propose it here. You can also share a saved meal from your shortcuts.</p> : <>
+        <label htmlFor={selectId} className="block text-xs font-semibold text-gray-600">Choose one of your meals to propose</label>
+        <select id={selectId} value={selectedMeal?.id ?? ""} disabled={pending || attempted} className={`${mealControl} w-full`} onChange={(event) => {
+          const next = meals.find((meal) => meal.id === event.target.value) ?? null;
+          setSelectedMeal(next); setSelectedIds(next?.items.map((item) => item.id) ?? []); setMultiplier("1"); setError(null); setSent(false); intent.reset(); attemptedProposal.current = null;
+        }}>
+          <option value="">Choose a meal</option>
+          {meals.map((meal) => <option key={meal.id} value={meal.id}>{meal.name} · {meal.items.length} items</option>)}
+        </select>
+        {selectedMeal && !sent && <>
+          <MealSelectionEditor items={selectedMeal.items} selectedIds={selectedIds} multiplier={multiplier} onSelectedChange={setSelectedIds} onMultiplierChange={setMultiplier} disabled={pending || attempted} />
+          <button type="button" disabled={pending || !selectedIds.length || !validMealPortion(multiplier)} className="min-h-11 w-full rounded-xl bg-purple-600 px-4 py-2 text-sm font-bold text-white hover:bg-purple-700 focus-visible:ring-2 focus-visible:ring-purple-500 focus-visible:ring-offset-2 disabled:opacity-50" onClick={() => {
+            if (inFlight.current) return;
+            const payload = { expectedUserId: userId, source: selectedMeal.source, recipientId: buddyId, name: selectedMeal.name, date, mealType: selectedMeal.mealType, selectedItemIds: selectedIds, multiplier: Number(multiplier) };
+            const attempt = attemptedProposal.current ?? { ...payload, requestId: intent.forPayload(payload) };
+            attemptedProposal.current = attempt;
+            setAttempted(true);
+            inFlight.current = true; setError(null);
+            startTransition(async () => {
+              try { await proposeSharedMeal(attempt); setAttempted(false); setSent(true); router.refresh(); }
+              catch { setError("Couldn’t confirm the proposal. Retry with the same selections safely, or reload if you switched accounts."); }
+              finally { inFlight.current = false; }
+            });
+          }}>{pending ? "Sending…" : attempted ? `Retry proposal to ${buddyName}` : `Propose meal to ${buddyName}`}</button>
+          {attempted && !pending && <div className="space-y-2"><p className="text-xs text-gray-600">Selections are locked while this proposal waits for confirmation.</p><button type="button" className={mealControl} onClick={() => window.location.reload()}>Reload proposal status</button></div>}
+        </>}
+      </>}
+      {error && <p role="alert" className="text-sm text-red-700">{error}</p>}
+      <p role="status" aria-live="polite" className="text-sm text-purple-800">{sent ? `Proposed to ${buddyName}. They can review it in Shared meals.` : null}</p>
     </div>
   );
 }

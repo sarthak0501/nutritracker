@@ -63,17 +63,23 @@ export function safeNutrientsForEntry(
     entry.snapshotCarbsG != null &&
     entry.snapshotFatG != null
   ) {
-    return {
+    const nutrients = {
       kcal: entry.snapshotKcal,
       protein_g: entry.snapshotProteinG,
       carbs_g: entry.snapshotCarbsG,
       fat_g: entry.snapshotFatG,
       fiber_g: entry.snapshotFiberG ?? undefined,
     };
+    return validNutrients(nutrients) ? nutrients : null;
   }
   // Fall back to computed (existing entries without snapshot)
   const grams = gramsForEntry(entry, food);
   if (grams == null || !Number.isFinite(grams) || grams <= 0) return null;
-  return nutrientsForGrams(food, grams);
+  const nutrients = nutrientsForGrams(food, grams);
+  return validNutrients(nutrients) ? nutrients : null;
 }
 
+/** Zero is valid nutrition; non-finite or negative values must never enter totals. */
+export function validNutrients(nutrients: Nutrients): boolean {
+  return Object.values(nutrients).every((value) => value === undefined || (Number.isFinite(value) && value >= 0));
+}

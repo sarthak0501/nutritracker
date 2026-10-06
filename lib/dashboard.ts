@@ -2,6 +2,7 @@ import { prisma } from "@/lib/db";
 import { addNutrients, safeNutrientsForEntry, type Nutrients } from "@/lib/nutrition";
 import { gradeMeal } from "@/lib/meal-scoring";
 import { isoDaysBack } from "@/lib/dates";
+import { entryAmountLabel, isLegacyPortion } from "@/lib/meal-units";
 import type { FrequentFood } from "@/components/FrequentMeals";
 
 export const MEAL_META: Record<string, { label: string; icon: string }> = {
@@ -118,6 +119,11 @@ export async function getTodayDashboardData(userId: string, today: string) {
       lastMealType: lastEntry.mealType,
       kcalPer100g: food.kcalPer100g,
       proteinPer100g: food.proteinPer100g,
+      servingGrams: food.servingGrams,
+      sourceEntryId: lastEntry.id,
+      isLegacyPortion: isLegacyPortion(lastEntry, food),
+      portionLabel: entryAmountLabel(lastEntry, food),
+      lastNutrients: safeNutrientsForEntry(lastEntry, food) ?? undefined,
     });
   }
 
@@ -146,7 +152,7 @@ export async function getTodayDashboardData(userId: string, today: string) {
   // Streak: consecutive logged days ending today or yesterday
   const logDateSet = new Set(allLogDates.map((d) => d.date));
   let streak = 0;
-  let streakStart = logDateSet.has(today) ? 0 : 1;
+  const streakStart = logDateSet.has(today) ? 0 : 1;
   while (logDateSet.has(isoDaysBack(streakStart + streak))) streak++;
 
   return {

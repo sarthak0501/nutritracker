@@ -27,12 +27,18 @@ import { AnniversaryCelebration } from "@/components/AnniversaryCelebration";
 import { AmbientHearts } from "@/components/AmbientHearts";
 import { LoveLetterButton } from "@/components/LoveLetterButton";
 import { NutritionAlerts } from "@/components/NutritionAlerts";
+import { getMealLibrary } from "@/lib/meal-library";
+import { MealLibrary } from "@/components/MealLibrary";
+import { SharedMeals } from "@/components/SharedMeals";
+import { CooperativeCheckIn } from "@/components/CooperativeCheckIn";
+import { HomeScreenHelp } from "@/components/HomeScreenHelp";
+import { entryAmountLabel, isLegacyPortion } from "@/lib/meal-units";
 
 export default async function TodayPage() {
   const user = await requireSession();
   const today = todayIsoDate();
 
-  const data = await getTodayDashboardData(user.id, today);
+  const [data, library] = await Promise.all([getTodayDashboardData(user.id, today), getMealLibrary(user.id, today)]);
 
   if (!data.profile?.onboardingCompleted) redirect("/onboarding");
 
@@ -47,7 +53,6 @@ export default async function TodayPage() {
     yesterday,
     mealGrades,
     totalBurned,
-    kcalTarget,
     kcalPct,
     kcalDiff,
     remainingKcal,
@@ -95,11 +100,15 @@ export default async function TodayPage() {
       {isSweetheart && anniv && !annivToday && daysToAnniv >= 1 && daysToAnniv <= 3 && (
         <AnniversaryCountdown days={daysToAnniv} />
       )}
-      {/* 1. PRIMARY: AI Composer — the hero */}
+      <MealLibrary userId={user.id} date={today} saved={library.saved} recent={library.recent} buddy={library.buddy} />
+      <SharedMeals userId={user.id} date={today} pending={library.pending} sent={library.sent} />
+
+      {/* Describe a new meal when it is not in your library. */}
       <Card variant="action">
         <div className="mb-1 text-lg font-bold text-gray-900">What did you eat today?</div>
         <div className="mb-4 text-xs text-gray-400">Describe a meal or your whole day — I'll estimate and organize it.</div>
         <LogMealTabs
+          userId={user.id}
           date={today}
           onApplyEstimate={applyEstimatedMeal}
           onApplyDay={applyEstimatedDay}
@@ -182,13 +191,11 @@ export default async function TodayPage() {
       </Card>
 
       {/* 3. TERTIARY: Shortcuts — copy yesterday + frequent meals */}
-      {(copyableMeals.length > 0 || frequentMeals.length > 0) && (
         <div className="rounded-2xl bg-surface-muted p-4 space-y-4">
-          <div className="text-[11px] font-bold uppercase tracking-wide text-gray-400">Shortcuts</div>
-          <CopyYesterdayMeal meals={copyableMeals} fromDate={yesterday} toDate={today} />
-          <FrequentMeals foods={frequentMeals} date={today} />
+          {(copyableMeals.length > 0 || frequentMeals.length > 0) && <div className="text-[11px] font-bold uppercase tracking-wide text-gray-400">Individual foods and yesterday</div>}
+          <CopyYesterdayMeal userId={user.id} meals={copyableMeals} fromDate={yesterday} toDate={today} />
+          <FrequentMeals userId={user.id} foods={frequentMeals} date={today} />
         </div>
-      )}
 
       {/* Logged meals */}
       {mealsWithEntries.length > 0 && (
@@ -233,19 +240,22 @@ export default async function TodayPage() {
                     const n = safeNutrientsForEntry(e, e.food);
                     const reactions = (e.reactions ?? []) as { id: string; type: string; user: { username: string } }[];
                     const macroLine = [
-                      `${round1(e.amount)}${e.unit === "GRAM" ? "g" : " srv"}`,
+                      entryAmountLabel(e, e.food),
                       n ? `${round0(n.kcal)} cal · ${round1(n.protein_g)}P ${round1(n.carbs_g)}C ${round1(n.fat_g)}F` : "",
                     ].filter(Boolean).join(" · ");
                     return (
                       <LogEntryCard
                         key={e.id}
                         entryId={e.id}
+                        userId={user.id}
                         foodName={e.food.name}
                         brand={e.food.brand}
                         amount={e.amount}
                         unit={e.unit}
                         mealType={e.mealType}
                         macroLine={macroLine}
+                        isLegacyPortion={isLegacyPortion(e, e.food)}
+                        portionLabel={entryAmountLabel(e, e.food)}
                       >
                         {reactions.length > 0 && (
                           <div className="mt-2 flex items-center gap-1 flex-wrap">
@@ -288,7 +298,9 @@ export default async function TodayPage() {
       )}
 
       {/* Buddy feed — social section */}
-      <BuddyTodayFeed currentUserId={user.id} date={today} />
+      <CooperativeCheckIn userId={user.id} checkIn={library.checkIn} buddyName={library.buddy?.username} />
+      <BuddyTodayFeed currentUserId={user.id} date={today} recentMeals={library.recent} />
+      <HomeScreenHelp />
     </div>
   );
 }

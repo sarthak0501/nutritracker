@@ -1,46 +1,25 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useRef } from "react";
 
-type Props = {
-  date: string;
-  maxDate: string;
-};
+type Props = { date: string; maxDate: string };
 
 export function HistoryDatePicker({ date, maxDate }: Props) {
   const router = useRouter();
-  const inputRef = useRef<HTMLInputElement>(null);
-
   return (
-    <button
-      type="button"
-      onClick={() => {
-        const el = inputRef.current;
-        if (!el) return;
-        if (typeof el.showPicker === "function") el.showPicker();
-        else el.click();
-      }}
-      className="rounded-xl bg-surface-muted px-3 py-2 text-sm font-semibold text-gray-600 hover:bg-gray-200 transition-colors"
-      aria-label="Pick a date"
-      title="Pick a date"
-    >
-      📅
+    <label className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-surface-muted text-gray-600 focus-within:ring-2 focus-within:ring-brand-600">
+      <span aria-hidden="true">📅</span>
       <input
-        ref={inputRef}
         type="date"
+        aria-label="Pick a date"
         value={date}
         max={maxDate}
-        onChange={(e) => {
-          const v = e.target.value;
-          if (!v) return;
-          if (v === maxDate) router.push("/history");
-          else router.push(`/history?date=${v}`);
+        onChange={(event) => {
+          const value = event.target.value;
+          if (value) router.push(value === maxDate ? "/history" : `/history?date=${value}`);
         }}
-        className="sr-only"
-        aria-hidden="true"
-        tabIndex={-1}
+        className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
       />
-    </button>
+    </label>
   );
 }

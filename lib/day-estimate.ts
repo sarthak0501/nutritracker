@@ -1,40 +1,34 @@
 import { z } from "zod";
-import { getLlmConfig } from "./llm";
-import { llmNumber, llmStrings, llmString } from "./llm-schema";
+import { EstimatedItemSchema, getLlmConfig } from "./llm";
+import { llmStrings, llmString } from "./llm-schema";
 
 // --- Zod schemas ---
 
-const DayItemSchema = z.object({
-  description: z.string(),
-  quantity: llmNumber(z.number().positive()),
-  unit: z.string(),
-  nutrients: z.object({
-    kcal: llmNumber(z.number().nonnegative()),
-    protein_g: llmNumber(z.number().nonnegative()),
-    carbs_g: llmNumber(z.number().nonnegative()),
-    fat_g: llmNumber(z.number().nonnegative()),
-    fiber_g: llmNumber(z.number().nonnegative().optional()),
-  }),
-  confidence: llmNumber(z.number().min(0).max(1)),
-  assumptions: llmStrings(),
-});
+const DayItemSchema = EstimatedItemSchema;
 
 const DayMealSchema = z.object({
   mealType: z.enum(["BREAKFAST", "LUNCH", "DINNER", "SNACK", "CUSTOM"]),
   mealName: z.string().nullish(),
   detectedFrom: llmString(""),
-  items: z.array(DayItemSchema),
+  items: z.array(DayItemSchema).min(1).max(100),
 });
 
 const DayEstimateSchema = z.object({
-  meals: z.array(DayMealSchema),
-  unparsed: llmStrings(),
+  meals: z.array(DayMealSchema).min(1).max(20),
+  unparsed: llmStrings().pipe(z.array(z.string()).max(100)),
   notes: llmString(""),
+}).refine((estimate) => estimate.meals.reduce((count, meal) => count + meal.items.length, 0) <= 100, {
+  message: "A day estimate may contain at most 100 food items",
+  path: ["meals"],
 });
 
 export type DayEstimateResponse = z.infer<typeof DayEstimateSchema>;
 export type DayMeal = z.infer<typeof DayMealSchema>;
 export type DayItem = z.infer<typeof DayItemSchema>;
+
+export function parseDayEstimate(value: unknown): DayEstimateResponse {
+  return DayEstimateSchema.parse(value);
+}
 
 // --- LLM prompt ---
 
@@ -93,7 +87,10 @@ Return ONLY a JSON object:
 Rules:
 - Group items by detected meal type
 - nutrients are for the TOTAL quantity of that item (not per 100g)
-- quantity must always be in grams
+- quantity must always be a finite positive weight in grams and unit must be "g"
+- Nutrient values must be finite and zero or greater
+- Return 1–20 nonempty meals, with at most 100 food items across the entire day
+- Return at most 100 assumptions per item and 100 unparsed entries
 - ALL numeric fields must be plain JSON numbers (100, not "100g"), NEVER strings
 - confidence: 0.9+ if well-known, 0.7-0.9 if reasonable guess, <0.7 if uncertain
 - If unsure about meal type, default to SNACK with low confidence

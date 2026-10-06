@@ -20,6 +20,7 @@ import { requireSession } from "@/lib/session";
 import { todayIsoDate } from "@/lib/dates";
 import { HistoryDatePicker } from "@/components/HistoryDatePicker";
 import Link from "next/link";
+import { entryAmountLabel, isLegacyPortion } from "@/lib/meal-units";
 
 function emptyTotals(): Nutrients {
   return { kcal: 0, protein_g: 0, carbs_g: 0, fat_g: 0, fiber_g: 0, sodium_mg: 0 };
@@ -123,20 +124,20 @@ export default async function HistoryPage({
     <div className="space-y-4">
       {/* Date nav */}
       <Card>
-        <div className="flex items-center justify-between gap-4">
-          <Link href={`/history?date=${prevDate(date)}`}
-            className="rounded-xl bg-surface-muted px-3 py-2 text-sm font-semibold text-gray-600 hover:bg-gray-200 transition-colors">
+        <div className="grid grid-cols-[44px_1fr_auto] items-center gap-2">
+          <Link aria-label="Previous day" href={`/history?date=${prevDate(date)}`}
+            className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-xl bg-surface-muted px-3 py-2 text-sm font-semibold text-gray-600 hover:bg-gray-200 transition-colors">
             ←
           </Link>
           <div className="text-center">
-            <div className="text-lg font-bold">{formatDateLabel(date)}</div>
+            <div className="text-sm sm:text-lg font-bold">{formatDateLabel(date)}</div>
             <div className="text-xs text-gray-400 tabular-nums">{date}</div>
             {isToday && <div className="text-xs text-brand-600 font-medium mt-0.5">Today</div>}
           </div>
           <div className="flex items-center gap-2">
             <HistoryDatePicker date={date} maxDate={today} />
-            <Link href={isToday ? "/history" : `/history?date=${nextDate(date)}`}
-              className={`rounded-xl bg-surface-muted px-3 py-2 text-sm font-semibold text-gray-600 hover:bg-gray-200 transition-colors ${isToday ? "opacity-30 pointer-events-none" : ""}`}>
+            <Link aria-label="Next day" href={isToday ? "/history" : `/history?date=${nextDate(date)}`}
+              className={`inline-flex min-h-11 min-w-11 items-center justify-center rounded-xl bg-surface-muted px-3 py-2 text-sm font-semibold text-gray-600 hover:bg-gray-200 transition-colors ${isToday ? "opacity-30 pointer-events-none" : ""}`}>
               →
             </Link>
           </div>
@@ -156,7 +157,7 @@ export default async function HistoryPage({
               <Link
                 key={label}
                 href={href}
-                className={`rounded-full px-2.5 py-1 text-xs font-semibold transition-colors ${
+                className={`inline-flex min-h-11 items-center rounded-full px-2.5 py-1 text-xs font-semibold transition-colors ${
                   active
                     ? "bg-gray-900 text-white"
                     : "bg-surface-muted text-gray-500 hover:bg-gray-200"
@@ -206,6 +207,7 @@ export default async function HistoryPage({
       {/* Add meal for this date */}
       <Card variant="action" title="Log a meal">
         <LogMealTabs
+          userId={user.id}
           date={date}
           onApplyEstimate={applyEstimatedMeal}
           onApplyDay={applyEstimatedDay}
@@ -258,19 +260,22 @@ export default async function HistoryPage({
               {mealEntries.map((e) => {
                 const n = safeNutrientsForEntry(e, e.food);
                 const macroLine = [
-                  `${round1(e.amount)} ${e.unit === "GRAM" ? "g" : "serving"}`,
+                  entryAmountLabel(e, e.food),
                   n ? `${round0(n.kcal)} cal · ${round1(n.protein_g)}P ${round1(n.carbs_g)}C ${round1(n.fat_g)}F` : "",
                 ].filter(Boolean).join(" · ");
                 return (
                   <LogEntryCard
                     key={e.id}
                     entryId={e.id}
+                    userId={user.id}
                     foodName={e.food.name}
                     brand={e.food.brand}
                     amount={e.amount}
                     unit={e.unit}
                     mealType={e.mealType}
                     macroLine={macroLine}
+                    isLegacyPortion={isLegacyPortion(e, e.food)}
+                    portionLabel={entryAmountLabel(e, e.food)}
                   />
                 );
               })}

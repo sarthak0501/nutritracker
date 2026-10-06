@@ -58,11 +58,6 @@ model User {
 
   reactionsGiven         Reaction[]
   workoutReactionsGiven  WorkoutReaction[]
-  logBatches             LogBatch[]
-  savedMeals             SavedMeal[]
-  sentMealProposals      MealProposal[] @relation("MealProposalSender")
-  receivedMealProposals  MealProposal[] @relation("MealProposalRecipient")
-  weeklyCheckIns         WeeklyCheckIn[]
 
   @@index([username])
 }
@@ -89,7 +84,6 @@ model Profile {
   dietaryRestrictions  String[] @default([])
   healthConditions     String[] @default([])
   onboardingCompleted  Boolean  @default(false)
-  cooperativeCheckInEnabled Boolean @default(false)
 
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
@@ -116,8 +110,6 @@ model Food {
 
   servingName     String?
   servingGrams    Float?
-  // Null preserves legacy records; new verified gram-based foods use GRAMS.
-  nutritionBasis  String?
 
   createdAt       DateTime   @default(now())
   updatedAt       DateTime   @updatedAt
@@ -152,8 +144,6 @@ model LogEntry {
 
   foodId         String
   food           Food       @relation(fields: [foodId], references: [id], onDelete: Cascade)
-  batchId        String?
-  batch          LogBatch?  @relation(fields: [batchId], references: [id], onDelete: SetNull)
 
   reactions      Reaction[]
 
@@ -163,64 +153,6 @@ model LogEntry {
   @@index([date])
   @@index([userId, date])
   @@index([mealType, date])
-  @@index([batchId])
-}
-
-model LogBatch {
-  id        String    @id @default(cuid())
-  userId    String
-  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  requestId String
-  kind      String
-  createdAt DateTime  @default(now())
-  undoneAt  DateTime?
-  entries   LogEntry[]
-
-  @@unique([userId, requestId])
-  @@index([userId, createdAt])
-}
-
-model SavedMeal {
-  id        String   @id @default(cuid())
-  userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  name      String
-  pinned    Boolean  @default(true)
-  items     Json
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@index([userId, pinned])
-}
-
-model MealProposal {
-  id              String   @id @default(cuid())
-  senderId        String
-  recipientId     String
-  sender          User     @relation("MealProposalSender", fields: [senderId], references: [id], onDelete: Cascade)
-  recipient       User     @relation("MealProposalRecipient", fields: [recipientId], references: [id], onDelete: Cascade)
-  senderRequestId String
-  name            String
-  date            String
-  mealType        MealType
-  items           Json
-  status          String   @default("PENDING")
-  acceptedBatchId String?
-  createdAt       DateTime @default(now())
-  respondedAt     DateTime?
-
-  @@unique([senderId, senderRequestId])
-  @@index([recipientId, status])
-}
-
-model WeeklyCheckIn {
-  id        String   @id @default(cuid())
-  userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  weekStart String
-  createdAt DateTime @default(now())
-
-  @@unique([userId, weekStart])
 }
 
 model BuddyRelationship {

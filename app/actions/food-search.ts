@@ -2,6 +2,8 @@
 
 import { prisma } from "@/lib/db";
 import { requireSession } from "@/lib/session";
+import { entryAmountLabel, isLegacyPortion } from "@/lib/meal-units";
+import { safeNutrientsForEntry, type Nutrients } from "@/lib/nutrition";
 
 export type FoodSearchResult = {
   id: string;
@@ -14,15 +16,21 @@ export type FoodSearchResult = {
   fiberPer100g: number | null;
   lastAmount: number;
   lastMealType: string;
+  lastUnit: string;
+  lastEntryId: string;
+  isLegacyPortion: boolean;
+  portionLabel: string;
+  lastNutrients: Nutrients | null;
 };
 
 export async function searchFoods(query: string): Promise<FoodSearchResult[]> {
   const user = await requireSession();
-  if (query.trim().length < 1) return [];
+  if (typeof query !== "string" || query.trim().length < 1) return [];
+  const search = query.trim().slice(0, 200);
 
   const foods = await prisma.food.findMany({
     where: {
-      name: { contains: query, mode: "insensitive" },
+      name: { contains: search, mode: "insensitive" },
       logEntries: { some: { userId: user.id } },
     },
     orderBy: { logEntries: { _count: "desc" } },
@@ -32,12 +40,11 @@ export async function searchFoods(query: string): Promise<FoodSearchResult[]> {
         where: { userId: user.id },
         orderBy: { createdAt: "desc" },
         take: 1,
-        select: { amount: true, mealType: true },
       },
     },
   });
 
-  return foods.map((f) => ({
+  return foods.filter((food) => food.logEntries.length > 0).map((f) => ({
     id: f.id,
     name: f.name,
     brand: f.brand,
@@ -48,5 +55,10 @@ export async function searchFoods(query: string): Promise<FoodSearchResult[]> {
     fiberPer100g: f.fiberPer100g,
     lastAmount: f.logEntries[0]?.amount ?? 100,
     lastMealType: f.logEntries[0]?.mealType ?? "BREAKFAST",
+    lastUnit: f.logEntries[0].unit,
+    lastEntryId: f.logEntries[0].id,
+    isLegacyPortion: isLegacyPortion(f.logEntries[0], f),
+    portionLabel: entryAmountLabel(f.logEntries[0], f),
+    lastNutrients: safeNutrientsForEntry(f.logEntries[0], f),
   }));
 }

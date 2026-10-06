@@ -10,7 +10,7 @@ function getSecret(): Uint8Array {
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
 
-  if (pathname.startsWith("/_next") || pathname.startsWith("/api/auth") || pathname === "/favicon.ico") {
+  if (pathname.startsWith("/_next") || pathname.startsWith("/api/auth") || ["/favicon.ico", "/manifest.webmanifest", "/icon.svg", "/apple-icon"].includes(pathname)) {
     return NextResponse.next();
   }
 
