@@ -1,376 +1,206 @@
 "use client";
 
-import { useState, useEffect, useTransition } from "react";
-import { EstimateFromText } from "@/components/EstimateFromText";
-import type { EstimateResponse } from "@/lib/llm";
-import type { DayMeal } from "@/lib/day-estimate";
+import { useEffect, useRef, useState, useTransition, type FormEvent } from "react";
+import { z } from "zod";
+import { EstimateFromText, type EstimateFromTextProps } from "@/components/EstimateFromText";
+import { DraftPrivacy } from "@/components/DraftPrivacy";
 import { searchFoods, type FoodSearchResult } from "@/app/actions/food-search";
-import { createLogEntryFromExistingFood } from "@/app/actions/logging";
+import { createLogEntryFromExistingFood, undoLogBatch } from "@/app/actions/logging";
+import type { LogResult } from "@/lib/meal-writes";
+import { DRAFTS_CLEARED_EVENT, pruneMealDrafts, readScopedDraft, removeScopedDraft, writeScopedDraft, type DraftScope } from "@/lib/drafts";
 
-const MEALS = [
-  { key: "BREAKFAST", label: "Breakfast" },
-  { key: "LUNCH", label: "Lunch" },
-  { key: "DINNER", label: "Dinner" },
-  { key: "SNACK", label: "Snacks" },
-  { key: "CUSTOM", label: "Custom" },
-];
+const MEALS = ["BREAKFAST", "LUNCH", "DINNER", "SNACK", "CUSTOM"] as const;
+const mealLabel = (value: string) => value === "SNACK" ? "Snacks" : value.charAt(0) + value.slice(1).toLowerCase();
+const inputClass = "w-full rounded-xl border-0 bg-surface-muted px-3 py-2.5 text-base focus:ring-2 focus:ring-brand-500";
+const buttonClass = "min-h-11 rounded-xl bg-brand-600 px-4 py-2.5 text-sm font-bold text-white disabled:opacity-50";
+const finiteNutrient = z.number().finite().nonnegative();
+const ChoiceSchema = z.object({
+  id: z.string(), name: z.string(), lastEntryId: z.string(), lastMealType: z.string(), portionLabel: z.string(),
+  lastAmount: z.number().finite().positive(), lastUnit: z.enum(["GRAM", "SERVING"]),
+  lastNutrients: z.object({ kcal: finiteNutrient, protein_g: finiteNutrient, carbs_g: finiteNutrient, fat_g: finiteNutrient, fiber_g: finiteNutrient.optional() }).nullable(),
+});
+const fieldsSchema = z.object({
+  name: z.string().max(200), brand: z.string().max(200), amount: z.string().max(30), mealType: z.enum(MEALS),
+  kcalPer100g: z.string().max(30), proteinPer100g: z.string().max(30), carbsPer100g: z.string().max(30), fatPer100g: z.string().max(30), fiberPer100g: z.string().max(30),
+});
+const ManualDraftSchema = z.object({
+  step: z.enum(["search", "log-existing", "create-new"]), query: z.string().max(200), selected: ChoiceSchema.nullable(),
+  multiplier: z.string().max(30), mealType: z.enum(MEALS), fields: fieldsSchema, requestId: z.string().min(1).max(128).nullable(),
+});
+type ManualDraft = z.infer<typeof ManualDraftSchema>;
+function emptyManualDraft(): ManualDraft {
+  return { step: "search", query: "", selected: null, multiplier: "1", mealType: "BREAKFAST", requestId: null,
+    fields: { name: "", brand: "", amount: "100", mealType: "BREAKFAST", kcalPer100g: "", proteinPer100g: "", carbsPer100g: "", fatPer100g: "", fiberPer100g: "" } };
+}
 
-type ManualStep = "search" | "log-existing" | "create-new";
+type Props = {
+  date: string; userId: string;
+  onApplyEstimate: EstimateFromTextProps["onApply"];
+  onApplyDay: EstimateFromTextProps["onApplyDay"];
+  manualAction: (formData: FormData) => Promise<LogResult>;
+};
 
-export function LogMealTabs({
-  date,
-  onApplyEstimate,
-  onApplyDay,
-  manualAction,
-}: {
-  date: string;
-  onApplyEstimate: (input: {
-    date: string;
-    mealType: string;
-    mealName?: string;
-    estimate: EstimateResponse;
-    sourceText: string;
-  }) => Promise<void>;
-  onApplyDay: (input: {
-    date: string;
-    meals: DayMeal[];
-    sourceText: string;
-  }) => Promise<void>;
-  manualAction: (formData: FormData) => Promise<void>;
-}) {
-  const [mode, setMode] = useState<"quick" | "fullday" | "manual">("quick");
-  const [amount, setAmount] = useState(100);
+export function LogMealTabs(props: Props) {
+  return <MealTabs key={`${props.userId ?? "no-drafts"}:${props.date}`} {...props} />;
+}
 
-  // Manual mode sub-state
-  const [manualStep, setManualStep] = useState<ManualStep>("search");
-  const [searchQuery, setSearchQuery] = useState("");
-  const [searchResults, setSearchResults] = useState<FoodSearchResult[]>([]);
+function MealTabs({ date, userId, onApplyEstimate, onApplyDay, manualAction }: Props) {
+  const [mode, setMode] = useState<"manual" | "quick" | "fullday">("manual");
+  const [draft, setDraft] = useState<ManualDraft>(emptyManualDraft);
+  const [ready, setReady] = useState(false);
+  const [storageAvailable, setStorageAvailable] = useState(Boolean(userId));
+  const [results, setResults] = useState<FoodSearchResult[]>([]);
   const [searching, setSearching] = useState(false);
-  const [selectedFood, setSelectedFood] = useState<FoodSearchResult | null>(null);
-  const [existingAmount, setExistingAmount] = useState(100);
-  const [existingMealType, setExistingMealType] = useState("BREAKFAST");
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<LogResult | null>(null);
+  const [notice, setNotice] = useState("");
   const [logging, startLog] = useTransition();
+  const [undoing, startUndo] = useTransition();
+  const lastStored = useRef("");
+  const inFlight = useRef(false);
+  const scope: DraftScope = { userId: userId ?? "", date, mode: "manual" };
 
-  // Reset manual sub-state when switching to manual mode
-  function enterManual() {
-    setMode("manual");
-    setManualStep("search");
-    setSearchQuery("");
-    setSearchResults([]);
-    setSelectedFood(null);
-  }
-
-  // Debounced search
   useEffect(() => {
-    if (manualStep !== "search") return;
-    const timer = setTimeout(async () => {
-      if (searchQuery.trim().length < 1) {
-        setSearchResults([]);
-        setSearching(false);
-        return;
-      }
-      setSearching(true);
-      const results = await searchFoods(searchQuery);
-      setSearchResults(results);
-      setSearching(false);
-    }, 300);
-    return () => clearTimeout(timer);
-  }, [searchQuery, manualStep]);
+    if (userId) pruneMealDrafts(userId);
+    const saved = userId ? readScopedDraft(scope, (value) => { const parsed = ManualDraftSchema.safeParse(value); return parsed.success ? parsed.data : null; }) : null;
+    const next = saved ?? emptyManualDraft();
+    setDraft(next);
+    lastStored.current = JSON.stringify(next);
+    try { setStorageAvailable(Boolean(userId && window.localStorage)); } catch { setStorageAvailable(false); }
+    setReady(true);
+    const clear = () => { setReady(false); setDraft(emptyManualDraft()); };
+    window.addEventListener(DRAFTS_CLEARED_EVENT, clear);
+    return () => window.removeEventListener(DRAFTS_CLEARED_EVENT, clear);
+    // Keyed by account and date.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
+  useEffect(() => {
+    if (!ready || !userId) return;
+    const serialized = JSON.stringify(draft);
+    if (lastStored.current === serialized) return;
+    lastStored.current = serialized;
+    if (draft.query || draft.selected || draft.fields.name || draft.step === "create-new") setStorageAvailable(writeScopedDraft(scope, draft));
+    else removeScopedDraft(scope);
+    // Scope is fixed for this keyed instance.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [draft, ready, userId]);
+
+  useEffect(() => {
+    if (mode !== "manual" || draft.step !== "search" || !ready) return;
+    let cancelled = false;
+    setResults([]);
+    if (!draft.query.trim()) { setSearching(false); return; }
+    setSearching(true);
+    const timer = setTimeout(async () => {
+      try {
+        const found = await searchFoods(draft.query);
+        if (!cancelled) { setResults(found); setError(null); }
+      } catch { if (!cancelled) setError("Could not search your foods. Try again when connected, or create a manual entry."); }
+      finally { if (!cancelled) setSearching(false); }
+    }, 300);
+    return () => { cancelled = true; clearTimeout(timer); };
+  }, [draft.query, draft.step, mode, ready]);
+
+  function update(patch: Partial<ManualDraft>) { setDraft((previous) => ({ ...previous, ...patch })); setError(null); }
+  function updateField(field: keyof ManualDraft["fields"], value: string) { setDraft((previous) => ({ ...previous, fields: { ...previous.fields, [field]: value } })); setError(null); }
   function selectFood(food: FoodSearchResult) {
-    setSelectedFood(food);
-    setExistingAmount(Math.round(food.lastAmount));
-    setExistingMealType(food.lastMealType);
-    setManualStep("log-existing");
+    const selected = ChoiceSchema.safeParse(food);
+    if (!selected.success) { setError("This older food cannot be reused safely yet. Enter its nutrition manually."); return; }
+    update({ selected: selected.data, multiplier: "1", mealType: MEALS.find((value) => value === food.lastMealType) ?? "BREAKFAST", step: "log-existing", requestId: null });
+  }
+  function discard() {
+    if (draft.requestId && !window.confirm("A save may already have reached your account. Discard this draft? Check your history before adding it again.")) return;
+    removeScopedDraft(scope); setDraft(emptyManualDraft()); setResults([]); setError(null);
   }
 
-  function handleLogExisting() {
-    if (!selectedFood) return;
+  function save(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (inFlight.current) return;
+    const existing = draft.step === "log-existing";
+    if (existing && (!draft.selected || !draft.selected.lastNutrients)) return;
+    if (!existing && !draft.fields.name.trim()) { setError("Enter a food name before saving."); return; }
+    const attempted = { ...draft, requestId: draft.requestId ?? crypto.randomUUID() };
+    const form = new FormData();
+    form.set("date", date); form.set("requestId", attempted.requestId); form.set("expectedUserId", userId);
+    if (existing) {
+      form.set("sourceEntryId", attempted.selected!.lastEntryId);
+      form.set("foodId", attempted.selected!.id);
+      form.set("amount", String(attempted.selected!.lastAmount));
+      form.set("unit", attempted.selected!.lastUnit);
+      form.set("portionMultiplier", attempted.multiplier);
+      form.set("mealType", attempted.mealType);
+    } else {
+      for (const [key, value] of Object.entries(attempted.fields)) form.set(key, value);
+      form.set("unit", "GRAM");
+    }
+    setDraft(attempted);
+    if (userId) setStorageAvailable(writeScopedDraft(scope, attempted));
+    setError(null); inFlight.current = true;
     startLog(async () => {
-      const fd = new FormData();
-      fd.set("date", date);
-      fd.set("foodId", selectedFood.id);
-      fd.set("mealType", existingMealType);
-      fd.set("amount", String(existingAmount));
-      fd.set("unit", "GRAM");
-      await createLogEntryFromExistingFood(fd);
-      // Reset back to search for quick re-logging
-      setManualStep("search");
-      setSearchQuery("");
-      setSearchResults([]);
-      setSelectedFood(null);
+      try {
+        const saved = existing ? await createLogEntryFromExistingFood(form) : await manualAction(form);
+        if (saved.undone) { update({ requestId: null }); setError("This earlier addition was undone. Review and save again to add it."); return; }
+        removeScopedDraft(scope); setDraft(emptyManualDraft()); setResults([]); setSuccess(saved); setNotice("");
+      } catch { setError("Could not confirm the save. Your draft is kept. Retry this unchanged entry safely."); }
+      finally { inFlight.current = false; }
+    });
+  }
+  function undo() {
+    if (!success) return;
+    setError(null);
+    startUndo(async () => {
+      try { await undoLogBatch({ batchId: success.batchId, expectedUserId: userId }); setSuccess(null); setNotice("Meal addition undone."); }
+      catch { setError("Could not undo. Try again; you can also check the saved entry in history."); }
     });
   }
 
-  return (
-    <div>
-      {/* Mode selector */}
-      <div className="flex gap-2 mb-4">
-        <button
-          onClick={() => setMode("quick")}
-          className={`flex-1 rounded-xl py-2.5 text-sm font-bold transition-all ${
-            mode === "quick"
-              ? "bg-brand-600 text-white shadow-sm"
-              : "bg-surface-muted text-gray-500 hover:text-gray-700 hover:bg-gray-200"
-          }`}
-        >
-          Quick meal
-        </button>
-        <button
-          onClick={() => setMode("fullday")}
-          className={`flex-1 rounded-xl py-2.5 text-sm font-bold transition-all ${
-            mode === "fullday"
-              ? "bg-brand-600 text-white shadow-sm"
-              : "bg-surface-muted text-gray-500 hover:text-gray-700 hover:bg-gray-200"
-          }`}
-        >
-          Full day
-        </button>
-        <button
-          onClick={enterManual}
-          className={`rounded-xl px-3 py-2.5 text-sm font-medium transition-all ${
-            mode === "manual"
-              ? "bg-gray-800 text-white"
-              : "bg-surface-muted text-gray-400 hover:text-gray-600"
-          }`}
-        >
-          Manual
-        </button>
-      </div>
-
-      {mode === "quick" && (
-        <div>
-          <EstimateFromText date={date} onApply={onApplyEstimate} onApplyDay={onApplyDay} forceMode="single" />
-          <div className="mt-2 text-xs text-gray-400">
-            Describe a meal and I'll estimate the macros for you.
-          </div>
-        </div>
-      )}
-
-      {mode === "fullday" && (
-        <div>
-          <EstimateFromText date={date} onApply={onApplyEstimate} onApplyDay={onApplyDay} forceMode="fullday" />
-          <div className="mt-2 text-xs text-gray-400">
-            Type breakfast, lunch, dinner, and snacks in one message. I'll organize and estimate everything.
-          </div>
-        </div>
-      )}
-
-      {mode === "manual" && (
-        <div className="grid gap-3">
-          {/* Step 1: Search */}
-          {manualStep === "search" && (
-            <>
-              <div className="relative">
-                <input
-                  autoFocus
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Search foods you've logged before…"
-                  className="w-full rounded-xl border-0 bg-surface-muted px-4 py-2.5 text-sm placeholder-gray-400 focus:ring-2 focus:ring-brand-500"
-                />
-                {searching && (
-                  <div className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-400">…</div>
-                )}
-              </div>
-
-              {/* Search results */}
-              {searchResults.length > 0 && (
-                <div className="rounded-xl border border-gray-100 bg-white divide-y divide-gray-50 shadow-sm overflow-hidden">
-                  {searchResults.map((food) => (
-                    <button
-                      key={food.id}
-                      type="button"
-                      onClick={() => selectFood(food)}
-                      className="w-full px-4 py-3 text-left hover:bg-surface-muted transition-colors"
-                    >
-                      <div className="flex items-center justify-between gap-2">
-                        <div className="min-w-0">
-                          <div className="text-sm font-semibold text-gray-800 truncate">
-                            {food.name}
-                            {food.brand && <span className="font-normal text-gray-400"> · {food.brand}</span>}
-                          </div>
-                          <div className="text-xs text-gray-400 mt-0.5 tabular-nums">
-                            {Math.round(food.kcalPer100g)} kcal · {Math.round(food.proteinPer100g)}P {Math.round(food.carbsPer100g)}C {Math.round(food.fatPer100g)}F per 100g
-                          </div>
-                        </div>
-                        <div className="text-xs text-gray-400 flex-shrink-0">
-                          last: {Math.round(food.lastAmount)}g →
-                        </div>
-                      </div>
-                    </button>
-                  ))}
-                </div>
-              )}
-
-              {searchQuery.length > 0 && searchResults.length === 0 && !searching && (
-                <div className="text-xs text-gray-400 text-center py-1">No matches found</div>
-              )}
-
-              {/* Divider + create new */}
-              <div className="flex items-center gap-3">
-                <div className="flex-1 h-px bg-gray-100" />
-                <button
-                  type="button"
-                  onClick={() => setManualStep("create-new")}
-                  className="text-xs font-medium text-brand-600 hover:text-brand-700 transition-colors"
-                >
-                  + Create new food
-                </button>
-                <div className="flex-1 h-px bg-gray-100" />
-              </div>
-            </>
-          )}
-
-          {/* Step 2a: Log existing food */}
-          {manualStep === "log-existing" && selectedFood && (
-            <>
-              {/* Food preview */}
-              <div className="rounded-xl bg-surface-muted px-4 py-3">
-                <div className="text-sm font-semibold text-gray-800">
-                  {selectedFood.name}
-                  {selectedFood.brand && <span className="font-normal text-gray-400"> · {selectedFood.brand}</span>}
-                </div>
-                <div className="text-xs text-gray-400 mt-0.5 tabular-nums">
-                  {Math.round(selectedFood.kcalPer100g)} kcal · {Math.round(selectedFood.proteinPer100g)}P {Math.round(selectedFood.carbsPer100g)}C {Math.round(selectedFood.fatPer100g)}F per 100g
-                </div>
-              </div>
-
-              <div className="grid gap-2 grid-cols-2">
-                {/* Amount stepper */}
-                <label className="grid gap-1 text-sm">
-                  <div className="text-xs font-medium text-gray-500">Amount (g)</div>
-                  <div className="flex items-center rounded-xl bg-surface-muted overflow-hidden">
-                    <button
-                      type="button"
-                      onClick={() => setExistingAmount((a) => Math.max(1, a - 10))}
-                      className="px-3 py-2.5 text-gray-500 hover:bg-gray-200 font-bold text-base leading-none"
-                    >−</button>
-                    <input
-                      type="number"
-                      step="1"
-                      min="1"
-                      value={existingAmount}
-                      onChange={(e) => setExistingAmount(Math.max(1, Number(e.target.value) || 1))}
-                      className="w-12 border-0 bg-transparent text-center text-sm font-semibold tabular-nums focus:outline-none focus:ring-0"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setExistingAmount((a) => a + 10)}
-                      className="px-3 py-2.5 text-gray-500 hover:bg-gray-200 font-bold text-base leading-none"
-                    >+</button>
-                  </div>
-                </label>
-
-                {/* Meal type */}
-                <label className="grid gap-1 text-sm">
-                  <div className="text-xs font-medium text-gray-500">Meal</div>
-                  <select
-                    value={existingMealType}
-                    onChange={(e) => setExistingMealType(e.target.value)}
-                    className="rounded-xl border-0 bg-surface-muted px-3 py-2.5 text-sm text-gray-900 focus:ring-2 focus:ring-brand-500"
-                  >
-                    {MEALS.map((m) => <option key={m.key} value={m.key}>{m.label}</option>)}
-                  </select>
-                </label>
-              </div>
-
-              <div className="flex gap-2">
-                <button
-                  type="button"
-                  onClick={handleLogExisting}
-                  disabled={logging}
-                  className="flex-1 rounded-xl bg-brand-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-brand-700 disabled:opacity-50 active:scale-[0.98] transition-all"
-                >
-                  {logging ? "Adding…" : "Add entry"}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setManualStep("search")}
-                  className="rounded-xl bg-surface-muted px-4 py-2.5 text-sm font-medium text-gray-500 hover:text-gray-700 transition-colors"
-                >
-                  ← Back
-                </button>
-              </div>
-            </>
-          )}
-
-          {/* Step 2b: Create new food */}
-          {manualStep === "create-new" && (
-            <>
-              <form action={manualAction} className="grid gap-3">
-                <input type="hidden" name="date" value={date} />
-                <div className="grid gap-2 grid-cols-2">
-                  <label className="grid gap-1 text-sm">
-                    <div className="text-xs font-medium text-gray-500">Meal</div>
-                    <select name="mealType" className="rounded-xl border-0 bg-surface-muted px-3 py-2.5 text-sm text-gray-900 focus:ring-2 focus:ring-brand-500">
-                      {MEALS.map((m) => <option key={m.key} value={m.key}>{m.label}</option>)}
-                    </select>
-                  </label>
-                  <label className="grid gap-1 text-sm">
-                    <div className="text-xs font-medium text-gray-500">Food name</div>
-                    <input name="name" required placeholder="Greek yogurt" className="rounded-xl border-0 bg-surface-muted px-3 py-2.5 text-sm placeholder-gray-400 focus:ring-2 focus:ring-brand-500" />
-                  </label>
-                </div>
-                <div className="grid gap-2 grid-cols-2">
-                  <label className="grid gap-1 text-sm">
-                    <div className="text-xs font-medium text-gray-500">Amount (g)</div>
-                    <div className="flex items-center rounded-xl bg-surface-muted overflow-hidden">
-                      <button type="button" onClick={() => setAmount((a) => Math.max(1, a - 10))} className="px-3 py-2.5 text-gray-500 hover:bg-gray-200 font-bold text-base leading-none">−</button>
-                      <input
-                        name="amount"
-                        type="number"
-                        step="1"
-                        min="1"
-                        required
-                        value={amount}
-                        onChange={(e) => setAmount(Math.max(1, Number(e.target.value) || 1))}
-                        className="w-12 border-0 bg-transparent text-center text-sm font-semibold tabular-nums focus:outline-none focus:ring-0"
-                      />
-                      <button type="button" onClick={() => setAmount((a) => a + 10)} className="px-3 py-2.5 text-gray-500 hover:bg-gray-200 font-bold text-base leading-none">+</button>
-                    </div>
-                  </label>
-                  <label className="grid gap-1 text-sm">
-                    <div className="text-xs font-medium text-gray-500">Calories / 100g</div>
-                    <input name="kcalPer100g" type="number" step="1" required className="rounded-xl border-0 bg-surface-muted px-3 py-2.5 text-sm focus:ring-2 focus:ring-brand-500" />
-                  </label>
-                </div>
-                <div className="grid gap-2 grid-cols-4">
-                  <label className="grid gap-1 text-sm">
-                    <div className="text-xs font-medium text-gray-500">Protein / 100g</div>
-                    <input name="proteinPer100g" type="number" step="1" required className="rounded-xl border-0 bg-surface-muted px-3 py-2.5 text-sm focus:ring-2 focus:ring-brand-500" />
-                  </label>
-                  <label className="grid gap-1 text-sm">
-                    <div className="text-xs font-medium text-gray-500">Carbs / 100g</div>
-                    <input name="carbsPer100g" type="number" step="1" required className="rounded-xl border-0 bg-surface-muted px-3 py-2.5 text-sm focus:ring-2 focus:ring-brand-500" />
-                  </label>
-                  <label className="grid gap-1 text-sm">
-                    <div className="text-xs font-medium text-gray-500">Fat / 100g</div>
-                    <input name="fatPer100g" type="number" step="1" required className="rounded-xl border-0 bg-surface-muted px-3 py-2.5 text-sm focus:ring-2 focus:ring-brand-500" />
-                  </label>
-                  <label className="grid gap-1 text-sm">
-                    <div className="text-xs font-medium text-gray-500">Fiber / 100g</div>
-                    <input name="fiberPer100g" type="number" step="0.1" min="0" className="rounded-xl border-0 bg-surface-muted px-3 py-2.5 text-sm focus:ring-2 focus:ring-brand-500" />
-                  </label>
-                </div>
-                <input type="hidden" name="unit" value="GRAM" />
-                <div className="flex gap-2">
-                  <button className="flex-1 rounded-xl bg-brand-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-brand-700 active:scale-[0.98] transition-all">
-                    Add entry
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setManualStep("search")}
-                    className="rounded-xl bg-surface-muted px-4 py-2.5 text-sm font-medium text-gray-500 hover:text-gray-700 transition-colors"
-                  >
-                    ← Back
-                  </button>
-                </div>
-              </form>
-            </>
-          )}
-        </div>
-      )}
+  const locked = logging || Boolean(draft.requestId);
+  const multiplier = Number(draft.multiplier);
+  const selectedNutrients = draft.selected?.lastNutrients;
+  return <div>
+    <div className="mb-4 grid grid-cols-3 gap-2" aria-label="How to log food">
+      {([{ key: "manual", label: "Saved / manual" }, { key: "quick", label: "Describe meal" }, { key: "fullday", label: "Whole day" }] as const).map((tab) => <button key={tab.key} type="button" onClick={() => setMode(tab.key)} aria-pressed={mode === tab.key} className={`min-h-11 rounded-xl px-2 py-2 text-sm font-semibold ${mode === tab.key ? "bg-brand-600 text-white" : "bg-surface-muted text-gray-600"}`}>{tab.label}</button>)}
     </div>
-  );
+    {/* Keep each draft mounted while switching modes, including an in-flight estimate. */}
+    <div hidden={mode !== "quick"}><EstimateFromText date={date} userId={userId} onApply={onApplyEstimate} onApplyDay={onApplyDay} forceMode="single" /></div>
+    <div hidden={mode !== "fullday"}><EstimateFromText date={date} userId={userId} onApply={onApplyEstimate} onApplyDay={onApplyDay} forceMode="fullday" /></div>
+    <div hidden={mode !== "manual"}>{!ready ? <p role="status" className="text-sm text-gray-500">Opening your food draft…</p> : <div className="space-y-3">
+      {error && <p role="alert" className="rounded-xl bg-red-50 p-3 text-sm text-red-700">{error}</p>}
+      {(success || notice) && <div role="status" className="rounded-xl bg-brand-50 p-3 text-sm text-brand-800">{success && <div className="flex items-center justify-between gap-2"><span>{success.entryCount} item{success.entryCount === 1 ? "" : "s"} saved.</span><button type="button" onClick={undo} disabled={undoing} className="min-h-11 px-3 font-bold underline">{undoing ? "Undoing…" : "Undo"}</button></div>}{notice}</div>}
+      {draft.step === "search" && <div className="space-y-3">
+        <label className="grid gap-1 text-sm"><span>Find a food you have logged</span><input value={draft.query} maxLength={200} onChange={(e) => update({ query: e.target.value })} placeholder="Search your foods…" className={inputClass} /></label>
+        {searching && <p role="status" className="text-sm text-gray-500">Searching…</p>}
+        {!searching && draft.query && results.length === 0 && !error && <p className="text-sm text-gray-500">No matches yet. You can create a food from its label below.</p>}
+        {results.length > 0 && <div className="divide-y divide-gray-100 overflow-hidden rounded-xl border border-gray-200">{results.map((food) => <button type="button" key={food.id} onClick={() => selectFood(food)} className="block min-h-14 w-full px-4 py-3 text-left hover:bg-gray-50"><span className="block text-sm font-semibold">{food.name}</span><span className="mt-1 block text-xs text-gray-500">{food.portionLabel}{food.lastNutrients ? ` · ${Math.round(food.lastNutrients.kcal)} kcal` : " · Nutrition unavailable"}</span></button>)}</div>}
+        <button type="button" onClick={() => update({ step: "create-new" })} className="min-h-11 rounded-xl px-3 text-sm font-semibold text-brand-700">+ Create food from a nutrition label</button>
+      </div>}
+      {draft.step !== "search" && <form onSubmit={save} className="space-y-3">
+        <fieldset disabled={locked} className="space-y-3 disabled:opacity-70">
+          {draft.step === "log-existing" && draft.selected && <>
+            <div className="rounded-xl bg-surface-muted p-3"><p className="font-semibold">{draft.selected.name}</p><p className="mt-1 text-sm text-gray-500">Previous portion: {draft.selected.portionLabel}</p></div>
+            <label className="grid gap-1 text-sm"><span>Portions of your previous entry</span><input type="number" required inputMode="decimal" min="0.01" max="20" step="any" value={draft.multiplier} onChange={(e) => update({ multiplier: e.target.value })} className={inputClass} /></label>
+            <div className="flex flex-wrap gap-2">{[0.5, 1, 1.5, 2].map((value) => <button key={value} type="button" onClick={() => update({ multiplier: String(value) })} className="min-h-11 rounded-lg border border-gray-200 px-4 text-sm">{value}×</button>)}</div>
+            {selectedNutrients && Number.isFinite(multiplier) && multiplier > 0 && <p className="text-sm tabular-nums">{Math.round(selectedNutrients.kcal * multiplier)} kcal · {(selectedNutrients.protein_g * multiplier).toFixed(1)}P · {(selectedNutrients.carbs_g * multiplier).toFixed(1)}C · {(selectedNutrients.fat_g * multiplier).toFixed(1)}F</p>}
+            {!selectedNutrients && <p role="alert" className="text-sm text-amber-700">This older entry has no reusable nutrition. Create it manually from known nutrition instead.</p>}
+            <label className="grid gap-1 text-sm"><span>Meal</span><select value={draft.mealType} onChange={(e) => update({ mealType: e.target.value as ManualDraft["mealType"] })} className={inputClass}>{MEALS.map((meal) => <option key={meal} value={meal}>{mealLabel(meal)}</option>)}</select></label>
+          </>}
+          {draft.step === "create-new" && <>
+            <label className="grid gap-1 text-sm"><span>Food name</span><input required maxLength={200} value={draft.fields.name} onChange={(e) => updateField("name", e.target.value)} className={inputClass} /></label>
+            <label className="grid gap-1 text-sm"><span>Brand (optional)</span><input maxLength={200} value={draft.fields.brand} onChange={(e) => updateField("brand", e.target.value)} className={inputClass} /></label>
+            <div className="grid grid-cols-2 gap-3">
+              <label className="grid gap-1 text-sm"><span>Amount eaten (g)</span><input type="number" inputMode="decimal" required min="0.01" step="any" value={draft.fields.amount} onChange={(e) => updateField("amount", e.target.value)} className={inputClass} /></label>
+              <label className="grid gap-1 text-sm"><span>Meal</span><select value={draft.fields.mealType} onChange={(e) => updateField("mealType", e.target.value)} className={inputClass}>{MEALS.map((meal) => <option key={meal} value={meal}>{mealLabel(meal)}</option>)}</select></label>
+            </div>
+            <p className="text-sm text-gray-500">Enter nutrition per 100 g from the label. Zero is a valid value.</p>
+            <div className="grid grid-cols-2 gap-3">{([{ key: "kcalPer100g", label: "Calories" }, { key: "proteinPer100g", label: "Protein (g)" }, { key: "carbsPer100g", label: "Carbs (g)" }, { key: "fatPer100g", label: "Fat (g)" }, { key: "fiberPer100g", label: "Fiber (g, optional)" }] as const).map((field) => <label key={field.key} className="grid gap-1 text-sm"><span>{field.label}</span><input type="number" inputMode="decimal" required={field.key !== "fiberPer100g"} min="0" step="any" value={draft.fields[field.key]} onChange={(e) => updateField(field.key, e.target.value)} className={inputClass} /></label>)}</div>
+          </>}
+          <button type="button" onClick={() => update({ step: "search", selected: null })} className="min-h-11 px-3 text-sm text-gray-600">Back to search</button>
+        </fieldset>
+        {draft.requestId && <p className="text-xs text-gray-600">A save was attempted. Retry this unchanged entry to confirm it safely.</p>}
+        <button type="submit" disabled={logging || (draft.step === "log-existing" && !selectedNutrients)} className={`${buttonClass} w-full`}>{logging ? "Saving…" : draft.requestId ? "Retry save safely" : "Save entry"}</button>
+      </form>}
+      <DraftPrivacy available={storageAvailable} onDiscard={discard} disabled={logging} />
+    </div>}</div>
+  </div>;
 }

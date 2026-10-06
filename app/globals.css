@@ -13,6 +13,17 @@ body {
 }
 
 @layer base {
+  button, select, summary, nav a {
+    min-height: 44px;
+  }
+
+  button, input, textarea, select, a, summary {
+    @apply focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-green-700;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { scroll-behavior: auto !important; animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+  }
   body {
     font-feature-settings: "cv02", "cv03", "cv04", "cv11";
     background-color: #fafaf8;
@@ -31,4 +42,9 @@ body {
 .no-scrollbar {
   -ms-overflow-style: none;
   scrollbar-width: none;
+}
+
+/* Keep controls legible and prevent iOS focus zoom, including utility-styled inputs. */
+@media (max-width: 640px) {
+  input, textarea, select { font-size: 16px; }
 }

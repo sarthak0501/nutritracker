@@ -92,7 +92,7 @@ async function captureStills() {
 
   // 3. buddy.png — scroll to the buddy feed on Today (fall back to /buddy if not present)
   await gotoAndSettle(page, "/");
-  let buddyAnchor = page.getByRole("heading", { name: /buddy|friends|feed/i }).first();
+  const buddyAnchor = page.getByRole("heading", { name: /buddy|friends|feed/i }).first();
   if (await buddyAnchor.count().catch(() => 0)) {
     await buddyAnchor.scrollIntoViewIfNeeded();
     await page.waitForTimeout(400);

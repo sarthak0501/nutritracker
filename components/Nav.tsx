@@ -15,13 +15,14 @@ const links = [
 export function Nav() {
   const pathname = usePathname();
   return (
-    <nav className="flex gap-1 overflow-x-auto no-scrollbar">
+    <nav aria-label="Main navigation" className="flex gap-1 overflow-x-auto no-scrollbar">
       {links.map((l) => {
         const active = l.href === "/" ? pathname === "/" : pathname.startsWith(l.href);
         return (
           <Link
             key={l.href}
             href={l.href}
+            aria-current={active ? "page" : undefined}
             className={`rounded-lg px-3 py-1.5 text-xs font-semibold whitespace-nowrap transition-all duration-150 ${
               active
                 ? "bg-gray-900 text-white shadow-sm"

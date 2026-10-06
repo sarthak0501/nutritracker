@@ -7,12 +7,15 @@
     "dev": "next dev",
     "build": "prisma generate && next build",
     "start": "next start",
-    "lint": "next lint",
+    "lint": "eslint .",
     "postinstall": "prisma generate",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "prisma:studio": "prisma studio",
-    "db:seed": "prisma db seed"
+    "db:seed": "prisma db seed",
+    "typecheck": "tsc --noEmit --incremental false",
+    "test": "node scripts/test-unit.mjs",
+    "test:integration": "node scripts/test-db.mjs run"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
