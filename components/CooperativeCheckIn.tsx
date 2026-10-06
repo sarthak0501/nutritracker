@@ -50,7 +50,7 @@ function CooperativeCheckInForAccount({ userId, checkIn, buddyName }: Cooperativ
           </div>
           <div className="flex flex-wrap gap-2">
             <span className="rounded-full bg-brand-50 px-3 py-2 text-xs font-semibold text-brand-800">You: {checkIn.completed ? "✓ checked in" : "ready when you are"}</span>
-            {buddyName && <span className="rounded-full bg-purple-50 px-3 py-2 text-xs text-purple-800">{buddyName}: {checkIn.buddyEnabled ? (checkIn.buddyCompleted ? "✓ checked in" : "ready when they are") : "hasn’t opted in"}</span>}
+            {buddyName && <span className="rounded-full bg-purple-50 px-3 py-2 text-xs text-purple-800">{buddyName}: {checkIn.buddyEnabled ? (checkIn.buddyCompleted ? "✓ checked in" : "ready when they are") : "status remains private until both join"}</span>}
           </div>
           {!checkIn.completed && <button type="button" disabled={pending} className={mealPrimary} onClick={() => run(() => completeWeeklyCheckIn({ expectedUserId: userId }), "Your check-in is saved for this week.")}>{pending ? "Saving…" : "I’ve checked in this week"}</button>}
           <div><button type="button" disabled={pending} className={mealControl} onClick={() => run(() => setCooperativeCheckIn({ expectedUserId: userId, enabled: false }), "Your weekly check-in is off. Your buddy’s choice is unchanged.")}>Turn off for me</button></div>

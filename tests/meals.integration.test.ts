@@ -198,6 +198,104 @@ test("sharing requires recipient acceptance and preserves their chosen date, mea
   assert.deepEqual(await prisma.logEntry.findMany({ where: { userId: f.sender.id }, orderBy: { id: "asc" } }), senderBefore);
 });
 
+test("incoming meals include all accepted buddies in either direction, with independent acceptance and decline", async () => {
+  const first = await fixture();
+  const second = await fixture();
+  const recipientId = first.recipient.id;
+  await prisma.buddyRelationship.create({ data: {
+    requesterId: recipientId, addresseeId: second.sender.id, status: "ACCEPTED",
+  } });
+  const before = await getMealLibrary(recipientId);
+  const profileBefore = await prisma.profile.findUniqueOrThrow({ where: { userId: recipientId } });
+  const sourceIds = [...first.source.entryIds, ...second.source.entryIds];
+  const sourcesBefore = await prisma.logEntry.findMany({ where: { id: { in: sourceIds } }, orderBy: { id: "asc" } });
+  const senders = [first, second];
+  const proposals = await Promise.all(senders.map((sender) => proposeSharedMealForUser(sender.sender.id, {
+    requestId: randomUUID(), source: sender.source, recipientId, date, mealType: "LUNCH",
+  })));
+  const otherRecipientProposal = await proposeSharedMealForUser(second.sender.id, {
+    requestId: randomUUID(), source: second.source, recipientId: second.recipient.id, date, mealType: "LUNCH",
+  });
+  const library = await getMealLibrary(recipientId);
+  assert.deepEqual(new Set(library.pending.map((proposal) => proposal.id)), new Set(proposals.map((proposal) => proposal.proposalId)));
+  assert.deepEqual(new Set(library.pending.map((proposal) => proposal.sender.id)), new Set(senders.map((sender) => sender.sender.id)));
+  assert.deepEqual(library.buddy, before.buddy, "Incoming proposals do not change the displayed buddy");
+  assert.deepEqual(library.sent, before.sent);
+  assert.deepEqual(library.checkIn, before.checkIn);
+  assert.deepEqual((await getMealLibrary(second.recipient.id)).pending.map((proposal) => proposal.id), [otherRecipientProposal.proposalId]);
+  assert.equal((await getMealLibrary(first.outsider.id)).pending.length, 0);
+
+  // Accept the sender not selected as the displayed buddy, which previously
+  // stayed hidden even though this relationship could create a valid proposal.
+  const acceptedIndex = senders.findIndex((sender) => sender.sender.id !== library.buddy?.id);
+  assert.ok(acceptedIndex >= 0);
+  const declinedIndex = 1 - acceptedIndex;
+  const accepted = await respondMealProposalForUser(recipientId, {
+    proposalId: proposals[acceptedIndex].proposalId, action: "accept",
+    date: "2026-10-08", mealType: "DINNER", multiplier: 1.5,
+    selectedItemIds: [senders[acceptedIndex].entries[0].id],
+  });
+  await respondMealProposalForUser(recipientId, { proposalId: proposals[declinedIndex].proposalId, action: "decline" });
+  const logged = await prisma.logEntry.findMany({ where: { userId: recipientId } });
+  assert.equal(logged.length, 1);
+  assert.equal(logged[0].batchId, accepted.batchId);
+  assert.equal(logged[0].foodId, senders[acceptedIndex].legacyFood.id);
+  assert.equal(logged[0].date, "2026-10-08");
+  assert.equal(logged[0].mealType, "DINNER");
+  assert.equal(logged[0].amount, 3);
+  assert.equal(logged[0].snapshotKcal, 234);
+  assert.equal(logged[0].sourceText, null);
+  assert.equal(await prisma.logBatch.count({ where: { userId: recipientId } }), 1);
+  assert.equal((await prisma.mealProposal.findUniqueOrThrow({ where: { id: proposals[declinedIndex].proposalId } })).status, "DECLINED");
+  assert.equal((await getMealLibrary(recipientId)).pending.length, 0);
+  assert.equal(await prisma.logEntry.count({ where: { userId: second.recipient.id } }), 0);
+  assert.deepEqual(await prisma.profile.findUniqueOrThrow({ where: { userId: recipientId } }), profileBefore);
+  assert.deepEqual(await prisma.logEntry.findMany({ where: { id: { in: sourceIds } }, orderBy: { id: "asc" } }), sourcesBefore);
+});
+
+test("incoming meals exclude unaccepted or removed buddies and enforce recipient and source isolation", async () => {
+  const first = await fixture();
+  const second = await fixture();
+  const recipientId = first.recipient.id;
+  const relationship = await prisma.buddyRelationship.create({ data: {
+    requesterId: recipientId, addresseeId: second.sender.id, status: "ACCEPTED",
+  } });
+  const retained = await proposeSharedMealForUser(first.sender.id, {
+    requestId: randomUUID(), source: first.source, recipientId, date, mealType: "LUNCH",
+  });
+  const hidden = await proposeSharedMealForUser(second.sender.id, {
+    requestId: randomUUID(), source: second.source, recipientId, date, mealType: "LUNCH",
+  });
+  for (const status of ["PENDING", "DECLINED", "REMOVED"] as const) {
+    if (status === "REMOVED") await prisma.buddyRelationship.delete({ where: { id: relationship.id } });
+    else await prisma.buddyRelationship.update({ where: { id: relationship.id }, data: { status } });
+    assert.deepEqual((await getMealLibrary(recipientId)).pending.map((proposal) => proposal.id), [retained.proposalId], status);
+    for (const action of ["accept", "decline"] as const) {
+      await assert.rejects(respondMealProposalForUser(recipientId, {
+        proposalId: hidden.proposalId, action, date, mealType: "LUNCH",
+      }), /no longer your connected buddy/);
+    }
+    await assert.rejects(proposeSharedMealForUser(second.sender.id, {
+      requestId: randomUUID(), source: second.source, recipientId, date, mealType: "LUNCH",
+    }), /no longer your connected buddy/);
+  }
+  for (const actor of [first.sender, first.outsider, second.recipient]) {
+    for (const action of ["accept", "decline"] as const) {
+      await assert.rejects(respondMealProposalForUser(actor.id, {
+        proposalId: retained.proposalId, action, date, mealType: "LUNCH",
+      }), /not available to your account/);
+    }
+  }
+  await assert.rejects(proposeSharedMealForUser(recipientId, {
+    requestId: randomUUID(), source: first.source, recipientId: first.sender.id, date, mealType: "LUNCH",
+  }), /does not belong to your account/);
+  assert.equal((await prisma.mealProposal.findUniqueOrThrow({ where: { id: hidden.proposalId } })).status, "PENDING");
+  assert.equal((await prisma.mealProposal.findUniqueOrThrow({ where: { id: retained.proposalId } })).status, "PENDING");
+  assert.equal(await prisma.logEntry.count({ where: { userId: recipientId } }), 0);
+  assert.equal(await prisma.logBatch.count({ where: { userId: recipientId } }), 0);
+  assert.equal(await prisma.mealProposal.count({ where: { senderId: recipientId } }), 0);
+});
+
 test("simultaneous accept retries create one recipient batch and Undo cannot be resurrected by another accept", async () => {
   const f = await fixture();
   const proposal = await proposeSharedMealForUser(f.sender.id, { requestId: randomUUID(), source: f.source, recipientId: f.recipient.id, date, mealType: "LUNCH" });

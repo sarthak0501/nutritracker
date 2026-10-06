@@ -326,21 +326,27 @@ export async function completeWeeklyCheckInForUser(userId: string) {
 
 export async function getMealLibrary(userId: string, today = todayIsoDate()): Promise<MealLibraryData> {
   const weekStart = weekStartForDate(today);
-  const [savedRows, entries, relationship, profile, ownCheckIn] = await Promise.all([
+  const [savedRows, entries, relationship, profile, ownCheckIn, pendingRows] = await Promise.all([
     prisma.savedMeal.findMany({ where: { userId }, orderBy: [{ pinned: "desc" }, { updatedAt: "desc" }] }),
     prisma.logEntry.findMany({ where: { userId }, include: { food: true }, orderBy: [{ date: "desc" }, { createdAt: "desc" }], take: 200 }),
     prisma.buddyRelationship.findFirst({ where: { status: "ACCEPTED", OR: [{ requesterId: userId }, { addresseeId: userId }] }, include: { requester: { select: { id: true, username: true } }, addressee: { select: { id: true, username: true } } } }),
     prisma.profile.findUnique({ where: { userId }, select: { cooperativeCheckInEnabled: true } }),
     prisma.weeklyCheckIn.findUnique({ where: { userId_weekStart: { userId, weekStart } }, select: { id: true } }),
-  ]);
-  const buddy = relationship ? (relationship.requesterId === userId ? relationship.addressee : relationship.requester) : null;
-  const enabled = profile?.cooperativeCheckInEnabled ?? false;
-  const [pendingRows, sentRows, buddyProfile, buddyCheckIn] = buddy ? await Promise.all([
     prisma.mealProposal.findMany({
-      where: { senderId: buddy.id, recipientId: userId, status: "PENDING" },
+      where: {
+        recipientId: userId, status: "PENDING",
+        sender: { OR: [
+          { buddyRequestsSent: { some: { addresseeId: userId, status: "ACCEPTED" } } },
+          { buddyRequestsReceived: { some: { requesterId: userId, status: "ACCEPTED" } } },
+        ] },
+      },
       include: { sender: { select: { id: true, username: true } }, recipient: { select: { id: true, username: true } } },
       orderBy: { createdAt: "desc" },
     }),
+  ]);
+  const buddy = relationship ? (relationship.requesterId === userId ? relationship.addressee : relationship.requester) : null;
+  const enabled = profile?.cooperativeCheckInEnabled ?? false;
+  const [sentRows, buddyProfile, buddyCheckIn] = buddy ? await Promise.all([
     prisma.mealProposal.findMany({
       where: { senderId: userId, recipientId: buddy.id },
       include: { sender: { select: { id: true, username: true } }, recipient: { select: { id: true, username: true } } },
@@ -348,7 +354,7 @@ export async function getMealLibrary(userId: string, today = todayIsoDate()): Pr
     }),
     enabled ? prisma.profile.findUnique({ where: { userId: buddy.id }, select: { cooperativeCheckInEnabled: true } }) : null,
     enabled ? prisma.weeklyCheckIn.findUnique({ where: { userId_weekStart: { userId: buddy.id, weekStart } }, select: { id: true } }) : null,
-  ]) : [[], [], null, null];
+  ]) : [[], null, null];
   const saved = savedRows.map((row): LibraryMeal => {
     const items = parseStoredItems(row.items);
     return { id: row.id, name: row.name, mealType: items[0].mealType, pinned: row.pinned, items: items.map(publicMealItem), source: { kind: "saved", id: row.id } };
