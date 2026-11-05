@@ -1,6 +1,8 @@
 import { LoginForm } from "@/components/LoginForm";
+import { safeOAuthReturn } from "@/lib/oauth-config";
 
-export default function LoginPage() {
+export default async function LoginPage({ searchParams }: { searchParams: Promise<{ next?: string | string[] }> }) {
+  const next = safeOAuthReturn((await searchParams).next);
   return (
     <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-brand-50 via-surface to-accent-50 px-4">
       <div className="w-full max-w-sm">
@@ -22,7 +24,8 @@ export default function LoginPage() {
             </div>
           </div>
         </div>
-        <LoginForm />
+        {next && <p className="mb-4 text-center text-sm text-gray-600">Sign in to connect your own NutriTracker account to Claude.</p>}
+        <LoginForm next={next} />
       </div>
     </div>
   );

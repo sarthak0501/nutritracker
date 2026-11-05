@@ -112,6 +112,7 @@ export async function estimateNutritionFromText(input: { text: string }): Promis
   if (config.isAnthropic) {
     const res = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
+      signal: AbortSignal.timeout(45_000),
       headers: {
         "Content-Type": "application/json",
         "x-api-key": config.apiKey,
@@ -130,6 +131,7 @@ export async function estimateNutritionFromText(input: { text: string }): Promis
   } else {
     const res = await fetch(`${config.baseUrl}/chat/completions`, {
       method: "POST",
+      signal: AbortSignal.timeout(45_000),
       headers: {
         "Content-Type": "application/json",
         ...(config.apiKey ? { Authorization: `Bearer ${config.apiKey}` } : {}),

@@ -63,8 +63,79 @@ model User {
   sentMealProposals      MealProposal[] @relation("MealProposalSender")
   receivedMealProposals  MealProposal[] @relation("MealProposalRecipient")
   weeklyCheckIns         WeeklyCheckIn[]
+  oauthConnections       OAuthConnection[]
+  oauthAuthorizationCodes OAuthAuthorizationCode[]
 
   @@index([username])
+}
+
+// OAuth credentials are opaque; only SHA-256 hashes are persisted.
+model OAuthClient {
+  id           String   @id @default(cuid())
+  registrationKey String @unique
+  name         String
+  redirectUris String[]
+  createdAt    DateTime @default(now())
+  connections  OAuthConnection[]
+  authorizationCodes OAuthAuthorizationCode[]
+}
+
+model OAuthConnection {
+  id        String @id @default(cuid())
+  userId    String
+  user      User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  clientId  String
+  client    OAuthClient @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  scopes    String[]
+  resource  String
+  createdAt DateTime @default(now())
+  expiresAt DateTime
+  revokedAt DateTime?
+  accessTokens OAuthAccessToken[]
+  refreshTokens OAuthRefreshToken[]
+  @@index([userId, createdAt])
+}
+
+model OAuthAuthorizationCode {
+  hash          String @id
+  consentId     String @unique
+  userId        String
+  user          User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  clientId      String
+  client        OAuthClient @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  redirectUri   String
+  codeChallenge String
+  scopes        String[]
+  resource      String
+  expiresAt     DateTime
+  consumedAt    DateTime?
+  @@index([expiresAt])
+}
+
+model OAuthAccessToken {
+  hash         String @id
+  connectionId String
+  connection   OAuthConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+  expiresAt    DateTime
+  @@index([connectionId])
+  @@index([expiresAt])
+}
+
+model OAuthRefreshToken {
+  hash         String @id
+  connectionId String
+  connection   OAuthConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+  expiresAt    DateTime
+  consumedAt   DateTime?
+  @@index([connectionId])
+  @@index([expiresAt])
+}
+
+model OAuthRateLimit {
+  key       String @id
+  count     Int
+  expiresAt DateTime
+  @@index([expiresAt])
 }
 
 model Profile {

@@ -3,11 +3,12 @@
 import { useActionState } from "react";
 import { loginAction } from "@/app/actions/auth";
 
-export function LoginForm() {
+export function LoginForm({ next }: { next?: string | null }) {
   const [error, action, isPending] = useActionState(loginAction, null);
 
   return (
     <form action={action} className="space-y-4">
+      {next && <input type="hidden" name="next" value={next} />}
       <div className="rounded-2xl bg-surface-card p-6 shadow-card space-y-4">
         <label className="block space-y-1.5">
           <span className="text-sm font-medium text-gray-700">Username</span>

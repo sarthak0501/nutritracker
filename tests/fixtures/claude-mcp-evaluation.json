@@ -1,0 +1,33 @@
+{
+  "fixtureOnly": true,
+  "version": 1,
+  "username": "mcp-eval-jordan",
+  "otherUsername": "mcp-eval-riley",
+  "timezone": "America/Los_Angeles",
+  "targets": { "kcalTarget": 2100, "proteinTarget": 120, "carbsTarget": 250, "fatTarget": 70, "fiberTarget": 30 },
+  "startDate": "2026-10-26",
+  "endDate": "2026-11-01",
+  "nutrientOrder": ["kcal", "protein_g", "carbs_g", "fat_g", "fiber_g"],
+  "entries": [
+    { "date": "2026-10-26", "name": "Oat bowl", "mealName": "Monday breakfast", "mealType": "BREAKFAST", "snapshot": [400, 20, 50, 12, 8] },
+    { "date": "2026-10-26", "name": "Lentil plate", "mealName": "Monday lunch", "mealType": "LUNCH", "snapshot": [600, 30, 70, 20, 12] },
+    { "date": "2026-10-27", "name": "Pasta", "mealName": "Tuesday dinner", "mealType": "DINNER", "snapshot": [700, 35, 80, 25, null] },
+    { "date": "2026-10-27", "name": "Legacy serving without weight", "mealName": "Tuesday dinner", "mealType": "DINNER", "snapshot": null },
+    { "date": "2026-10-28", "name": "Sparkling water", "mealName": "Wednesday snack", "mealType": "SNACK", "snapshot": [0, 0, 0, 0, 0] },
+    { "date": "2026-10-30", "name": "Rice and beans", "mealName": "Harvest dinner", "mealType": "DINNER", "snapshot": [1200, 60, 130, 40, 20] },
+    { "date": "2026-10-31", "name": "Fruit and nuts", "mealName": "Saturday snack", "mealType": "SNACK", "snapshot": [300, 10, 45, 9, 4] },
+    { "date": "2026-10-31", "name": "Breakfast plate", "mealName": "Saturday breakfast", "mealType": "BREAKFAST", "snapshot": [500, 25, 60, 18, 6] }
+  ],
+  "dailyExtras": [
+    { "date": "2026-10-26", "waterGlasses": 4, "workoutKcal": 200 },
+    { "date": "2026-10-27", "waterGlasses": 2, "workoutKcal": 0 },
+    { "date": "2026-10-28", "waterGlasses": 5, "workoutKcal": 100 },
+    { "date": "2026-10-29", "waterGlasses": 8, "workoutKcal": 150 },
+    { "date": "2026-10-30", "waterGlasses": 3, "workoutKcal": 300 },
+    { "date": "2026-10-31", "waterGlasses": 6, "workoutKcal": 50 },
+    { "date": "2026-11-01", "waterGlasses": 0, "workoutKcal": 0 }
+  ],
+  "otherAccountEntry": { "date": "2026-10-30", "kcal": 9000 },
+  "expectedAnswers": ["mcp-eval-jordan", "Unknown", "200", "Sparkling water", "900", "740", "2", "2026-10-27", "Harvest dinner", "800"],
+  "verification": "Manually verified fixed-fixture answers: known calories 3700 across 5 logged dates, average 740; 2 unlogged dates; 1 entry lacks core nutrition; 2 entries lack fiber. Model evaluations have not been run."
+}

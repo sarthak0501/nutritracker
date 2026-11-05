@@ -10,6 +10,7 @@ const links = [
   { href: "/trends", label: "Trends" },
   { href: "/buddy", label: "Buddy" },
   { href: "/profile", label: "Profile" },
+  { href: "/connections", label: "Connections" },
 ];
 
 export function Nav() {
