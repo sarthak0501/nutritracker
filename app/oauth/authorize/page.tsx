@@ -26,7 +26,7 @@ export default async function AuthorizePage({ searchParams }: { searchParams: Pr
   const consent = await signConsent(session.id, authorization, offeredScopes);
   return <main className="mx-auto max-w-lg space-y-6 px-5 py-12">
     <div><p className="font-semibold text-brand-600">NutriTracker</p><h1 className="mt-2 text-2xl font-bold">Connect {authorization.clientName}</h1></div>
-    <p>Signed in as <strong>{session.username}</strong>. This connection can access only this NutriTracker account.</p>
+    <p>Signed in as <strong>{session.username}</strong>. This connection uses your NutriTracker account and the permissions you approve below.</p>
     <div className="rounded-2xl bg-surface-card p-5 shadow-card"><h2 className="font-semibold">Allow this assistant to:</h2><ul className="mt-3 list-disc space-y-2 pl-5">
       {authorization.scopes.map(scope => <li key={scope}>{MCP_SCOPE_DESCRIPTIONS[scope as McpScope]}</li>)}
     </ul></div>

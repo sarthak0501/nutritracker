@@ -165,7 +165,11 @@ try {
   assert.ok(inbox.incoming.some((proposal: { id: string }) => proposal.id === shared.proposalId));
   data(await rpc(jamie.tokens.access_token, "respond_shared_meal", { requestId: "browser-accept", proposalId: shared.proposalId, action: "accept", date: fixture.date, mealType: "SNACK", multiplier: 0.5 }));
   assert.equal(data(await rpc(jamie.tokens.access_token, "get_day", { date: fixture.date })).entryCount, 1);
-  pass("saved-meal logging, portion correction and recipient-approved buddy sharing over HTTP");
+  const buddyDay = data(await rpc(alex.tokens.access_token, "get_buddy_day", { buddyId: fixture.jamie.id, date: fixture.date }));
+  assert.equal(buddyDay.buddy.id, fixture.jamie.id);
+  assert.equal(buddyDay.entries.length, 1);
+  assert.equal(buddyDay.weight, undefined);
+  pass("saved-meal logging, portion correction, recipient-approved sharing and accepted buddy daily logs over HTTP");
   const undone = await rpc(alex.tokens.access_token, "undo_meal", { batchId: first.structuredContent.data.batchId });
   assert.ok(!undone.isError);
   await rpc(alex.tokens.access_token, "log_meal", args);

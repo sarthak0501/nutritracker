@@ -32,14 +32,14 @@ export const MCP_SCOPE_DESCRIPTIONS: Record<McpScope, string> = {
   "wellness:write": "Record and correct your water and body weight.",
   "meals:read": "Read your saved meals and food entries for corrections.",
   "meals:write": "Save and log reusable meals, and correct or remove your food entries.",
-  "sharing:read": "Read your accepted buddy names and meal proposals shared with you.",
+  "sharing:read": "Read your accepted buddies' daily food and workout logs, their names, and meal proposals shared with you. Private profiles, water and body weights are excluded.",
   "sharing:write": "Send meals to your accepted buddies, and accept or decline meals shared with you.",
 };
 export const MCP_OPTIONAL_CAPABILITIES: ReadonlyArray<{ key: string; label: string; scopes: readonly McpScope[] }> = [
   { key: "workouts", label: "Workouts", scopes: ["workouts:read", "workouts:write"] },
   { key: "wellness", label: "Water and body weight", scopes: ["wellness:read", "wellness:write"] },
   { key: "meals", label: "Saved meals and corrections", scopes: ["meals:read", "meals:write"] },
-  { key: "sharing", label: "Buddy meal sharing", scopes: ["sharing:read", "sharing:write"] },
+  { key: "sharing", label: "Buddy logs and meal sharing", scopes: ["sharing:read", "sharing:write"] },
 ];
 export function optionalConsentScopes(requested: readonly string[]): McpScope[] {
   return MCP_OPTIONAL_CAPABILITIES.flatMap(group => group.scopes).filter(scope => !requested.includes(scope));

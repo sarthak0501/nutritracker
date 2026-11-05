@@ -65,7 +65,7 @@ test("legacy Claude protocol initializes and exposes the complete account-scoped
     assert.match(init.result.instructions, /explicitly asks to log/);
   }
   const result = await rpc(await handle(request("tools/list")));
-  assert.equal(result.result.tools.length, 22);
+  assert.equal(result.result.tools.length, 23);
   for (const tool of result.result.tools) {
     assert.ok(tool.name.startsWith("nutritracker_"));
     assert.equal(tool.inputSchema.additionalProperties, false);
@@ -143,13 +143,14 @@ test("official MCP client can connect, discover tools and read an account", asyn
   });
   try {
     await client.connect(transport);
-    assert.equal((await client.listTools()).tools.length, 22);
+    assert.equal((await client.listTools()).tools.length, 23);
     const result = await client.callTool({ name: "nutritracker_get_account", arguments: {} });
     assert.deepEqual(result.structuredContent, { data: { username: "alice", tool: "account" } });
   } finally { await client.close(); }
 });
 
 const extensionInputs: Record<string, object> = {
+  get_buddy_day: {},
   get_workouts: {}, log_workout: { requestId: "a", date: "2026-11-01", completed: true, exercises: [{ exerciseName: "Walk", durationMinutes: 30 }] },
   update_workout: { requestId: "b", entryId: "a", expectedUpdatedAt: "2026-11-01T00:00:00.000Z", changes: { durationMinutes: 40 } },
   delete_workout: { requestId: "c", entryId: "a", expectedUpdatedAt: "2026-11-01T00:00:00.000Z" },
@@ -177,7 +178,7 @@ test("all new tools reject old grants and bind authorized calls to the current a
     const rejected = await rpc(await handle(request("tools/call", { name: `nutritracker_${name}`, arguments: { ...args, userId: "alice" } }, "bob")));
     assert.ok(rejected.error || rejected.result.isError, name);
   }
-  assert.equal(calls.length, 16);
+  assert.equal(calls.length, 17);
   const listed = (await rpc(await handle(request("tools/list")))).result.tools;
   for (const name of ["share_meal", "respond_shared_meal"]) assert.equal(listed.find((t: {name: string}) => t.name === `nutritracker_${name}`).annotations.openWorldHint, true);
 });

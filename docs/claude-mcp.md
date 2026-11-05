@@ -4,7 +4,8 @@ Use the existing NutriTracker account from Claude to track meals, workouts,
 water and body weight, review progress, and exchange meal proposals with accepted
 buddies. The connector runs on the hosted NutriTracker
 server, so a laptop does not need to stay on. Each person authorizes their own
-login and receives access only to that account's data.
+login and receives the access granted to that account, including accepted-buddy
+views when buddy permissions are approved.
 
 This document describes the implementation and deployment steps. It is not a
 record of a completed production deployment or a successful phone connection.
@@ -43,8 +44,8 @@ public MCP URL for both people; do not create a shared login.
    Complete your NutriTracker profile if this is a new account.
 4. Check the username and requested permissions shown on the permission page.
    If optional feature boxes appear, select the capabilities you want: **Workouts**,
-   **Water and body weight**, **Saved meals and corrections**, and **Buddy meal
-   sharing**. Each box explains the additional read/write access. Choose **Allow
+   **Water and body weight**, **Saved meals and corrections**, and **Buddy logs
+   and meal sharing**. Each box explains the additional read/write access. Choose **Allow
    connection** after reviewing your selection. If it shows the other person's
    account, choose **Use a different NutriTracker account** and sign in with
    your own account.
@@ -92,6 +93,7 @@ Examples:
 - “Record today's weigh-in as 76.2 kg.”
 - “Log half of my saved usual breakfast.”
 - “Send these lunch items to my buddy for them to review.”
+- “Show my accepted buddy's food and workouts for today.”
 
 Claude first prepares a meal estimate. The preparation does not save anything.
 It returns the foods, portions, estimated nutrients, date, and a short-lived
@@ -139,7 +141,7 @@ never adds entries to their log.
 
 ## Tools and access
 
-The server exposes 22 tools. Requested permissions are checked on every call.
+The server exposes 23 tools. Requested permissions are checked on every call.
 
 | Tool | What it does | Scope |
 |---|---|---|
@@ -163,13 +165,16 @@ The server exposes 22 tools. Requested permissions are checked on every call.
 | `nutritracker_log_existing_meal` | Logs a preset or selected existing items with chosen portions | `meals:read` + `nutrition:read` + `nutrition:write` |
 | `nutritracker_correct_meal_entries` | Scales, moves, renames or removes current food entries | `meals:write` + `nutrition:read` + `nutrition:write` |
 | `nutritracker_get_buddy_meals` | Lists accepted buddies and pending incoming meal proposals | `sharing:read` |
+| `nutritracker_get_buddy_day` | Reads an accepted buddy's daily food and workout logs under the existing buddy relationship | `sharing:read` |
 | `nutritracker_share_meal` | Sends selected meal details to an explicitly chosen accepted buddy | `sharing:read` + `sharing:write` + `nutrition:read` |
 | `nutritracker_respond_shared_meal` | Accepts or declines an incoming proposal; acceptance logs chosen portions | `sharing:read` + `sharing:write` + `nutrition:read` + `nutrition:write` |
 
 The authenticated connection determines the user. Tools do not accept a user ID
-to switch accounts or expose passwords. Buddy access is limited to accepted
-buddy identities and permitted meal proposals; other buddy logs and health
-profiles are not returned. Account and progress
+to switch the authenticated account or expose passwords. The buddy-day tool
+accepts an explicitly selected buddy ID and checks that the signed-in person has
+an accepted buddy relationship before returning daily food/workout logs. Buddy
+access also includes accepted buddy identities and permitted meal proposals.
+Private buddy profiles, water and body weights are not returned. Account and progress
 responses omit medical profile details. Data returned to Claude is handled under
 the user's Claude account settings and policies. Meal estimation still uses
 NutriTracker's configured AI service.
@@ -250,7 +255,7 @@ first, then this upgrade.
    Review and run it once against the same database. Retain the private report.
    The generator itself never reads credentials or connects to a database.
 5. Deploy the matching application. Existing connections retain their original
-   scopes. Verify the new 22-tool surface, old-grant permission restrictions,
+   scopes. Verify the new 23-tool surface, old-grant permission restrictions,
    native mobile-sized consent submission, and synthetic-account write/retry
    and isolation behavior. Clean up only those exact synthetic records.
 6. Only after live verification, tell each person to reconnect and select the
@@ -340,6 +345,9 @@ that snapshot are not included in the comparison.
 - Sharing requires an accepted buddy and explicit intent; only the recipient's
   acceptance writes their food entries. Declining or removing the buddy cannot
   be bypassed by another account.
+- Accepted buddy daily views match the website's food/workout access. Pending,
+  removed and unrelated buddies are rejected; private profiles, water and body
+  weights are excluded.
 
 The local suite covers the server behavior. The native-phone checks must be
 performed with the two actual Claude accounts after deployment.
@@ -361,7 +369,7 @@ invariants; assistant tool selection and phone behavior need separate validation
 | “Record 76.2 kg today and show my weight trend.” | Reads existing measurements, saves the dated weigh-in, and reads bounded history. Profile settings and nutrition targets are unchanged. |
 | “Save this logged breakfast as My breakfast, then log half of it for today's actual lunch.” | Creates a preset from owned entries, logs the selected portion once, and preserves existing nutrition snapshots without re-estimation. |
 | “I ate half the rice shown in today's lunch. Fix the portion, then remove the duplicate yogurt entry.” | Reads entry IDs/versions, scales the current rice portion and nutrition together, and removes only the selected yogurt. Retried changes do not apply twice. |
-| “Send only the dal from my lunch to my buddy. In their account, review the proposal and accept half for dinner.” | Requires explicit sharing with an accepted buddy; excludes unselected items/private notes. No recipient log changes until that account accepts its chosen portion/date/meal. |
+| “Show my accepted buddy's food and workouts today, then send only the dal from my lunch to that buddy.” | Reads only the accepted buddy's permitted food/workout records. Requires explicit sharing; excludes private profiles, water, body weights and unselected meal items. No recipient log changes until that account accepts its chosen portion/date/meal. |
 | “Summarize my food, workouts, water and weight for the last seven days.” | Combines progress, workout and measurement reads; identifies missing days and truncation, keeps estimated exercise calories separate from food targets, and does not infer unlogged days were rest/fasting days. |
 
 ### Rollback
