@@ -84,7 +84,7 @@ export default async function TrendsPage({
   for (const w of workouts) {
     const existing = workoutByDate.get(w.date) ?? { burned: 0, count: 0, volume: 0 };
     const vol = (w.weightKg ?? 0) * (w.sets ?? 0) * (w.reps ?? 0);
-    existing.burned += w.caloriesBurned;
+    existing.burned += w.caloriesBurned ?? 0;
     existing.count += 1;
     existing.volume += vol;
     workoutByDate.set(w.date, existing);
@@ -102,7 +102,7 @@ export default async function TrendsPage({
 
   // --- Averages ---
   const daysWithFood = nutritionData.filter((d) => d.kcal !== null).length || 1;
-  const daysWithWorkout = workoutData.filter((d) => d.caloriesBurned > 0).length || 1;
+  const daysWithWorkout = workoutData.filter((d) => d.exerciseCount > 0).length || 1;
 
   const nutritionSum = nutritionData.reduce(
     (acc, p) => {
@@ -134,7 +134,7 @@ export default async function TrendsPage({
   const avgWorkout = {
     burned: Math.round(workoutSum.burned / daysWithWorkout),
     volume: Math.round(workoutSum.volume / daysWithWorkout),
-    activeDays: workoutData.filter((d) => d.caloriesBurned > 0).length,
+    activeDays: workoutData.filter((d) => d.exerciseCount > 0).length,
   };
 
   // --- Weight data ---

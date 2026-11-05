@@ -128,7 +128,7 @@ export async function BuddyTodayFeed({
           <div className="flex items-center justify-between mb-3">
             <span className="text-sm font-bold text-gray-800">💪 {buddyName}'s workouts</span>
             <span className="text-sm font-semibold tabular-nums text-blue-600">
-              {round0(workouts.reduce((s, w) => s + w.caloriesBurned, 0))} kcal
+              {round0(workouts.reduce((s, w) => s + (w.caloriesBurned ?? 0), 0))} kcal
             </span>
           </div>
           <div className="space-y-2">
@@ -139,7 +139,7 @@ export async function BuddyTodayFeed({
                   {w.muscleGroup && <span className="capitalize">{w.muscleGroup} · </span>}
                   {w.durationMinutes && <span>{w.durationMinutes} min · </span>}
                   {w.sets && w.reps && <span>{w.sets}×{w.reps} · </span>}
-                  ~{round0(w.caloriesBurned)} kcal
+                  {w.caloriesBurned == null ? "Calories not recorded" : `~${round0(w.caloriesBurned)} kcal`}
                 </div>
                 <WorkoutReactionBar
                   workoutEntryId={w.id}

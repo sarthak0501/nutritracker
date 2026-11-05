@@ -106,3 +106,24 @@ question in a fresh conversation and compare its final answer exactly to its
 connect to `http://localhost:3091/api/mcp` using that fixture bearer token.
 Model-based evaluations have **not** been run; the XML is an evaluation set,
 not evidence of Claude Free or native mobile compatibility.
+
+## Expanded MCP tracking validation (2026-11-05)
+
+The MCP browser smoke now checks nine flows in each of Chromium and WebKit,
+including a nutrition-only connection denied new tools, explicit opt-in on
+reconnect, workout log/retry/correct/delete, unknown-calorie website rendering,
+water/weight round trips, saved meals, portion corrections, accepted buddies' daily
+food/workout logs, and recipient-approved buddy sharing. Each run uses isolated synthetic accounts and the native browser
+callback flow described above.
+
+The full suite has 30 unit/protocol tests and 67 database integration tests. New
+integration cases cover mutation receipts, concurrent retries, stale versions,
+transaction rollback, profile preservation, cross-account isolation, and
+accepted-buddy locking/consent, private-field redaction, and access revocation when
+a buddy relationship is removed. The rollout test rehearses and applies
+`20261105_mcp_tracking.sql`, verifies unchanged existing records and final Prisma
+schema parity, and checks rollback after a forced failure.
+
+These checks establish server/browser behavior, not assistant reasoning quality
+or automatic tool rediscovery in an already-open Claude chat. See the ten
+acceptance prompts in `docs/claude-mcp.md` for post-reconnect checks.

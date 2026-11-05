@@ -40,7 +40,7 @@ async function rpc(token: string, name: string, args: object = {}) {
   assert.ok(!payload.error, JSON.stringify(payload.error));
   return { status: response.status, ...payload.result };
 }
-async function connect(user: { id: string; username: string }, clientId: string, reloadConsent: boolean) {
+async function connect(user: { id: string; username: string }, clientId: string, reloadConsent: boolean, expanded = true) {
   const context = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true });
   contexts.push(context);
   const page = await context.newPage();
@@ -60,6 +60,11 @@ async function connect(user: { id: string; username: string }, clientId: string,
   }
   assert.match(await page.locator("body").innerText(), new RegExp(`Signed in as ${user.username}`));
   assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1));
+  for (const group of ["workouts", "wellness", "meals", "sharing"]) {
+    const checkbox = page.locator(`input[name="allow_${group}"]`);
+    assert.equal(await checkbox.isChecked(), false);
+    if (expanded) await checkbox.check();
+  }
   await page.screenshot({ path: `.test-state/mcp-browser/${browserName}-${user.username}-consent.png`, fullPage: true });
   const submitted = page.waitForRequest(request => request.url() === `${base}/oauth/consent` && request.method() === "POST");
   await page.getByRole("button", { name: "Allow connection", exact: true }).click();
@@ -106,7 +111,12 @@ try {
   assert.equal(registered.status, 201);
   const client = await registered.json();
   pass("public discovery, OAuth challenge and dynamic client registration");
+  const legacy = await connect(fixture.alex, client.client_id, true, false);
+  assert.equal((await rpc(legacy.tokens.access_token, "get_workouts")).isError, true);
+  const revoked = await fetch(`${base}/oauth/revoke`, { method: "POST", headers: { "content-type": "application/x-www-form-urlencoded" }, body: new URLSearchParams({ client_id: client.client_id, token: legacy.tokens.refresh_token }) });
+  assert.equal(revoked.status, 200);
   const alex = await connect(fixture.alex, client.client_id, true);
+  assert.match(alex.tokens.scope, /workouts:write/);
   const jamie = await connect(fixture.jamie, client.client_id, false);
   const prepared = await prepareMcpMeal(fixture.alex.id, { description: "one fixture apple", date: fixture.date, mealType: "SNACK" }, { estimate: async () => ({ items: [{ description: "Fixture apple", quantity: 100, unit: "g", nutrients: { kcal: 52, protein_g: 0.3, carbs_g: 14, fat_g: 0.2, fiber_g: 2.4 }, assumptions: ["Synthetic test estimate"], confidence: 1 }], notes: [] }) });
   const foreign = await rpc(jamie.tokens.access_token, "log_meal", { preparedMealToken: prepared.preparedMealToken });
@@ -122,6 +132,44 @@ try {
   const week = await rpc(alex.tokens.access_token, "get_progress", { endDate: fixture.date, days: 7 });
   assert.ok(!week.isError);
   pass("account isolation, meal save/retry and progress through the real HTTP route");
+  function data(result: Awaited<ReturnType<typeof rpc>>) {
+    assert.ok(!result.isError, JSON.stringify(result));
+    return result.structuredContent.data;
+  }
+  const exerciseInput = { requestId: "browser-workout", date: fixture.date, completed: true, exercises: [{ exerciseName: "Fixture bench press", sets: 3, reps: 10, weightKg: 40 }] };
+  const workout = data(await rpc(alex.tokens.access_token, "log_workout", exerciseInput)).entries[0];
+  assert.equal(data(await rpc(alex.tokens.access_token, "log_workout", exerciseInput)).entries[0].id, workout.id);
+  assert.equal(data(await rpc(jamie.tokens.access_token, "get_workouts")).entries.length, 0);
+  const corrected = data(await rpc(alex.tokens.access_token, "update_workout", { requestId: "browser-correct-workout", entryId: workout.id, expectedUpdatedAt: workout.updatedAt, changes: { weightKg: 35 } })).entry;
+  assert.equal(corrected.weightKg, 35);
+  await alex.page.goto(`${base}/workouts`);
+  await alex.page.getByText("Fixture bench press", { exact: true }).waitFor();
+  assert.match(await alex.page.locator("body").innerText(), /Calories not recorded/);
+  data(await rpc(alex.tokens.access_token, "delete_workout", { requestId: "browser-delete-workout", entryId: corrected.id, expectedUpdatedAt: corrected.updatedAt }));
+  const measurements = data(await rpc(alex.tokens.access_token, "get_measurements", { endDate: fixture.date, days: 1 }));
+  data(await rpc(alex.tokens.access_token, "set_water", { requestId: "browser-water", date: fixture.date, glasses: 4, expectedGlasses: measurements.water[0]?.glasses ?? 0 }));
+  data(await rpc(alex.tokens.access_token, "set_weight", { requestId: "browser-weight", date: fixture.date, weightKg: 75, expectedWeightKg: measurements.weight[0]?.weightKg ?? null }));
+  const measured = data(await rpc(alex.tokens.access_token, "get_measurements", { endDate: fixture.date, days: 1 }));
+  assert.equal(measured.water[0].glasses, 4); assert.equal(measured.weight[0].weightKg, 75);
+  pass("expanded consent, workout log/correct/delete, website display and water/weight round trip");
+  const day = data(await rpc(alex.tokens.access_token, "get_day", { date: fixture.date }));
+  const food = day.entries.find((entry: { batchId: string }) => entry.batchId === first.structuredContent.data.batchId);
+  const preset = data(await rpc(alex.tokens.access_token, "save_meal_preset", { requestId: "browser-preset", name: "Fixture snack", source: { kind: "entries", entryIds: [food.id] } }));
+  assert.ok(data(await rpc(alex.tokens.access_token, "get_saved_meals")).meals.some((meal: { id: string }) => meal.id === preset.id));
+  const repeated = data(await rpc(alex.tokens.access_token, "log_existing_meal", { requestId: "browser-log-preset", source: { kind: "saved", id: preset.id }, date: fixture.date, mealType: "SNACK" }));
+  assert.ok(repeated.saved);
+  data(await rpc(alex.tokens.access_token, "correct_meal_entries", { requestId: "browser-correct-food", entries: [{ action: "update", entryId: food.id, expectedUpdatedAt: food.updatedAt, multiplier: 0.5 }] }));
+  const shared = data(await rpc(alex.tokens.access_token, "share_meal", { requestId: "browser-share", source: { kind: "saved", id: preset.id }, recipientId: fixture.jamie.id, confirmed: true, date: fixture.date, mealType: "SNACK" }));
+  assert.equal(shared.savedToRecipientLog, false);
+  const inbox = data(await rpc(jamie.tokens.access_token, "get_buddy_meals"));
+  assert.ok(inbox.incoming.some((proposal: { id: string }) => proposal.id === shared.proposalId));
+  data(await rpc(jamie.tokens.access_token, "respond_shared_meal", { requestId: "browser-accept", proposalId: shared.proposalId, action: "accept", date: fixture.date, mealType: "SNACK", multiplier: 0.5 }));
+  assert.equal(data(await rpc(jamie.tokens.access_token, "get_day", { date: fixture.date })).entryCount, 1);
+  const buddyDay = data(await rpc(alex.tokens.access_token, "get_buddy_day", { buddyId: fixture.jamie.id, date: fixture.date }));
+  assert.equal(buddyDay.buddy.id, fixture.jamie.id);
+  assert.equal(buddyDay.entries.length, 1);
+  assert.equal(buddyDay.weight, undefined);
+  pass("saved-meal logging, portion correction, recipient-approved sharing and accepted buddy daily logs over HTTP");
   const undone = await rpc(alex.tokens.access_token, "undo_meal", { batchId: first.structuredContent.data.batchId });
   assert.ok(!undone.isError);
   await rpc(alex.tokens.access_token, "log_meal", args);

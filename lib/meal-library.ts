@@ -73,7 +73,7 @@ export type StoredMealItem = MealEntrySnapshot & {
 type Database = typeof prisma;
 type Transaction = Prisma.TransactionClient;
 
-function parseStoredItems(value: unknown): StoredMealItem[] {
+export function parseStoredItems(value: unknown): StoredMealItem[] {
   const result = z.array(storedItemSchema).min(1).max(100).safeParse(value);
   if (!result.success) throw new Error("This meal needs to be saved again from your history.");
   return result.data as StoredMealItem[];
@@ -160,7 +160,7 @@ export function itemForSharing(item: StoredMealItem): StoredMealItem {
   };
 }
 
-async function resolveSource(db: Database | Transaction, userId: string, rawSource: MealSource): Promise<StoredMealItem[]> {
+export async function resolveSource(db: Database | Transaction, userId: string, rawSource: MealSource): Promise<StoredMealItem[]> {
   const source = sourceSchema.parse(rawSource);
   if (source.kind === "saved") {
     const saved = await db.savedMeal.findFirst({ where: { id: source.id, userId } });

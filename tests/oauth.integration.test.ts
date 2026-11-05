@@ -7,8 +7,8 @@ import { middleware } from "../middleware";
 import { prisma } from "../lib/db";
 import { getSessionSecret, verifySessionToken } from "../lib/auth-token";
 import { authenticateMcpRequest, consumeMcpRateLimit, hashCredential, mcpUnauthorized } from "../lib/mcp-auth";
-import { allowedRedirectUris, getMcpConfig, safeOAuthReturn } from "../lib/oauth-config";
-import { approveConsent, authorizationMetadata, exchangeOAuthToken, OAuthError, protectedResourceMetadata, readConsent, registerOAuthClient, revokeOAuthToken, revokeUserConnection, signConsent, validateAuthorizationRequest } from "../lib/oauth";
+import { allowedRedirectUris, getMcpConfig, MCP_SCOPES, optionalConsentScopes, safeOAuthReturn } from "../lib/oauth-config";
+import { approveConsent, authorizationMetadata, exchangeOAuthToken, OAuthError, protectedResourceMetadata, readConsent, registerOAuthClient, revokeOAuthToken, revokeUserConnection, selectedConsentScopes, signConsent, validateAuthorizationRequest } from "../lib/oauth";
 import { POST as registerRoute } from "../app/oauth/register/route";
 import { POST as tokenRoute } from "../app/oauth/token/route";
 import { POST as consentRoute } from "../app/oauth/consent/route";
@@ -77,6 +77,7 @@ test("discovery and authentication challenge bind to the canonical MCP resource"
   assert.deepEqual(protectedResourceMetadata().authorization_servers, [origin]);
   assert.deepEqual(authorizationMetadata().code_challenge_methods_supported, ["S256"]);
   assert.equal(authorizationMetadata().registration_endpoint, `${origin}/oauth/register`);
+  assert.deepEqual(authorizationMetadata().scopes_supported, MCP_SCOPES);
   assert.equal(mcpUnauthorized().status, 401);
   assert.match(mcpUnauthorized().headers.get("www-authenticate")!, /oauth-protected-resource\/api\/mcp/);
   assert.equal(safeOAuthReturn("https://evil.invalid/oauth/authorize?x=1"), null);
@@ -117,6 +118,58 @@ test("signed consent is user-bound, tamper resistant and single-use", async () =
     const badOrigin = await consentRoute(new Request(`${origin}/oauth/consent`, { method: "POST", headers, body: new URLSearchParams({ consent: auth.consent, decision: "allow" }) }));
     assert.equal(badOrigin.status, 403);
   }
+});
+
+test("cached nutrition scopes gain only explicitly selected signed optional permissions", async () => {
+  const old = await exchangeOAuthToken((await grant()).tokenParams);
+  const auth = await authorization();
+  const offered = optionalConsentScopes(auth.request.scopes);
+  assert.ok(offered.includes("workouts:write"));
+  assert.ok(offered.includes("wellness:read"));
+  const consent = await signConsent(firstUser, auth.request, offered);
+  assert.deepEqual((await readConsent(consent, firstUser)).offeredScopes, offered);
+  const selected = selectedConsentScopes(new URLSearchParams({ allow_workouts: "yes", allow_wellness: "yes" }), offered);
+  assert.deepEqual(selected, ["workouts:read", "workouts:write", "wellness:read", "wellness:write"]);
+  const redirect = new URL(await approveConsent(firstUser, consent, selected));
+  const upgraded = await exchangeOAuthToken(new URLSearchParams({ grant_type: "authorization_code", client_id: clientId, redirect_uri: callback, resource, code_verifier: auth.verifier, code: redirect.searchParams.get("code")! }));
+  assert.deepEqual((await access(upgraded.access_token))!.scopes, [...auth.request.scopes, ...selected]);
+  assert.equal(upgraded.scope, [...auth.request.scopes, ...selected].join(" "));
+  assert.ok(!upgraded.scope.includes("sharing:"));
+  assert.ok(!upgraded.scope.includes("meals:"));
+  const refreshedOld = await exchangeOAuthToken(refreshParams(old.refresh_token));
+  assert.equal(refreshedOld.scope, "nutrition:read nutrition:write");
+  assert.deepEqual((await access(old.access_token))!.scopes, ["nutrition:read", "nutrition:write"]);
+  const illegalRefresh = refreshParams(refreshedOld.refresh_token); illegalRefresh.set("scope", MCP_SCOPES.join(" "));
+  await assert.rejects(exchangeOAuthToken(illegalRefresh), isOAuth("invalid_scope"));
+  const refreshedNew = await exchangeOAuthToken(refreshParams(upgraded.refresh_token));
+  assert.equal(refreshedNew.scope, upgraded.scope);
+});
+
+test("unchecked offers stay disabled and unoffered or forged permission selections fail closed", async () => {
+  const auth = await authorization();
+  assert.deepEqual((await readConsent(auth.consent, firstUser)).offeredScopes, []);
+  await assert.rejects(approveConsent(firstUser, auth.consent, ["workouts:write"]), isOAuth("invalid_scope"));
+  await assert.rejects(signConsent(firstUser, auth.request, ["admin"]), isOAuth("invalid_scope"));
+  const offered = ["workouts:read", "workouts:write"];
+  const consent = await signConsent(firstUser, auth.request, offered);
+  assert.throws(() => selectedConsentScopes(new URLSearchParams({ allow_workouts: "true" }), offered), isOAuth("invalid_scope"));
+  assert.throws(() => selectedConsentScopes(new URLSearchParams({ allow_sharing: "yes" }), offered), isOAuth("invalid_scope"));
+  assert.throws(() => selectedConsentScopes(new URLSearchParams({ allow_admin: "yes" }), offered), isOAuth("invalid_scope"));
+  assert.deepEqual(selectedConsentScopes(new URLSearchParams(), offered), []);
+  await assert.rejects(approveConsent(firstUser, consent, ["sharing:write"]), isOAuth("invalid_scope"));
+  await assert.rejects(approveConsent(secondUser, consent, offered), isOAuth("invalid_request"));
+  const redirect = new URL(await approveConsent(firstUser, consent));
+  const tokens = await exchangeOAuthToken(new URLSearchParams({ grant_type: "authorization_code", client_id: clientId, redirect_uri: callback, resource, code_verifier: auth.verifier, code: redirect.searchParams.get("code")! }));
+  assert.equal(tokens.scope, "nutrition:read nutrition:write");
+  await assert.rejects(approveConsent(firstUser, consent, offered), isOAuth("invalid_request"));
+});
+
+test("explicitly requested expanded scopes are shown in signed consent without optional duplication", async () => {
+  const auth = await authorization(firstUser, MCP_SCOPES.join(" "));
+  assert.deepEqual(optionalConsentScopes(auth.request.scopes), []);
+  assert.deepEqual((await readConsent(auth.consent, firstUser)).request.scopes, [...MCP_SCOPES]);
+  const tokens = await exchangeOAuthToken((await grant(firstUser, MCP_SCOPES.join(" "))).tokenParams);
+  assert.equal(tokens.scope, MCP_SCOPES.join(" "));
 });
 
 test("consent and malformed JWTs cannot impersonate browser sessions", async () => {

@@ -124,7 +124,7 @@ export async function getMcpDayProgress(userId: string, input: z.input<typeof Da
     accountData(userId, client),
     client.logEntry.findMany({ where: { userId, date }, include: { food: true }, orderBy: [{ createdAt: "asc" }, { id: "asc" }], take: MAX_QUERY_ENTRIES + 1 }),
     client.waterEntry.findUnique({ where: { userId_date: { userId, date } }, select: { glasses: true } }),
-    client.workoutEntry.aggregate({ where: { userId, date }, _sum: { caloriesBurned: true }, _count: true }),
+    client.workoutEntry.aggregate({ where: { userId, date }, _sum: { caloriesBurned: true }, _count: { _all: true, caloriesBurned: true } }),
   ]);
   checkQueryBound(entries);
   const summary = summarizeEntries(entries);
@@ -133,9 +133,9 @@ export async function getMcpDayProgress(userId: string, input: z.input<typeof Da
   return {
     ...account, date, timezone, ...summary, remaining,
     waterGlasses: water?.glasses ?? 0,
-    workouts: { count: workouts._count, estimatedCaloriesBurned: workouts._sum.caloriesBurned ?? 0 },
+    workouts: { count: workouts._count._all, estimatedCaloriesBurned: workouts._sum.caloriesBurned, entriesMissingCalories: workouts._count._all - workouts._count.caloriesBurned },
     entries: entries.slice(0, 100).map((entry) => ({
-      id: entry.id, batchId: entry.batchId, mealType: entry.mealType, mealName: entry.mealName,
+      id: entry.id, updatedAt: entry.updatedAt.toISOString(), date: entry.date, batchId: entry.batchId, mealType: entry.mealType, mealName: entry.mealName,
       food: entry.food.name, amount: entry.amount, unit: entry.unit, isEstimated: entry.isEstimated,
       nutrients: safeNutrientsForEntry(entry, entry.food),
     })),

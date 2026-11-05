@@ -81,7 +81,7 @@ export default async function HistoryPage({
     prisma.profile.findUnique({ where: { userId: user.id } }),
   ]);
 
-  const totalBurned = workouts.reduce((s, e) => s + e.caloriesBurned, 0);
+  const totalBurned = workouts.reduce((s, e) => s + (e.caloriesBurned ?? 0), 0);
 
   const byMeal = new Map<string, typeof entries>();
   for (const e of entries) {
@@ -301,7 +301,7 @@ export default async function HistoryPage({
                     {e.durationMinutes && <span>{e.durationMinutes} min · </span>}
                     {e.sets && e.reps && <span>{e.sets}×{e.reps} · </span>}
                     {e.weightKg && <span>{e.weightKg}kg · </span>}
-                    ~{round0(e.caloriesBurned)} kcal
+                    {e.caloriesBurned == null ? "Calories not recorded" : `~${round0(e.caloriesBurned)} kcal`}
                   </div>
                 </div>
                 <form action={deleteWorkoutEntry}>
