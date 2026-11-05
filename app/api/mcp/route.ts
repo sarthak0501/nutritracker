@@ -5,7 +5,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 const handle = createNutriTrackerMcpHandler({ afterWrite: () => {
-  for (const path of ["/", "/history", "/trends", "/buddy"]) revalidatePath(path);
+  for (const path of ["/", "/history", "/trends", "/buddy", "/workouts", "/profile"]) revalidatePath(path);
 } });
 export const POST = handle;
 export const GET = handle;

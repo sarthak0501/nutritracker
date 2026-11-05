@@ -42,7 +42,7 @@ export default async function WorkoutsPage() {
     orderBy: { createdAt: "asc" },
   });
 
-  const totalBurned = entries.reduce((s, e) => s + e.caloriesBurned, 0);
+  const totalBurned = entries.reduce((s, e) => s + (e.caloriesBurned ?? 0), 0);
 
   const previousRaw = await prisma.workoutEntry.findMany({
     where: { userId: user.id, date: { not: today } },
@@ -58,7 +58,7 @@ export default async function WorkoutsPage() {
   const previousWorkouts = Array.from(previousMap.values());
 
   const buddyId = await getBuddyId(user.id);
-  let buddyWorkouts: { exerciseName: string; muscleGroup: string | null; sets: number | null; reps: number | null; weightKg: number | null; caloriesBurned: number }[] = [];
+  let buddyWorkouts: { exerciseName: string; muscleGroup: string | null; sets: number | null; reps: number | null; weightKg: number | null; caloriesBurned: number | null }[] = [];
   let buddyInfo: { username: string } | null = null;
   let buddyTotalBurned = 0;
 
@@ -72,7 +72,7 @@ export default async function WorkoutsPage() {
     ]);
     buddyInfo = info;
     buddyWorkouts = bWorkouts;
-    buddyTotalBurned = bWorkouts.reduce((s, e) => s + e.caloriesBurned, 0);
+    buddyTotalBurned = bWorkouts.reduce((s, e) => s + (e.caloriesBurned ?? 0), 0);
   }
 
   return (
@@ -123,6 +123,7 @@ export default async function WorkoutsPage() {
 
       {entries.length > 0 && (
         <Card title="Today's exercises">
+          {entries.some(entry => entry.caloriesBurned == null) && <p className="mb-3 text-sm text-gray-600">Calorie totals include only recorded estimates. Some exercises have no calorie estimate.</p>}
           <div className="space-y-2">
             {entries.map((e) => (
               <div key={e.id} className="rounded-xl bg-surface-muted p-3">
@@ -134,7 +135,7 @@ export default async function WorkoutsPage() {
                       {e.durationMinutes && <span>{e.durationMinutes} min · </span>}
                       {e.sets && e.reps && <span>{e.sets}×{e.reps} · </span>}
                       {e.weightKg && <span>{e.weightKg}kg · </span>}
-                      ~{round0(e.caloriesBurned)} kcal
+                      {e.caloriesBurned == null ? "Calories not recorded" : `~${round0(e.caloriesBurned)} kcal`}
                       {e.isEstimated ? " · estimated" : ""}
                     </div>
                   </div>
@@ -187,7 +188,7 @@ export default async function WorkoutsPage() {
                       {e.muscleGroup && <span className="capitalize">{e.muscleGroup} · </span>}
                       {e.sets && e.reps && <span>{e.sets}×{e.reps} · </span>}
                       {e.weightKg && <span>{e.weightKg}kg · </span>}
-                      ~{round0(e.caloriesBurned)} kcal
+                      {e.caloriesBurned == null ? "Calories not recorded" : `~${round0(e.caloriesBurned)} kcal`}
                     </div>
                   </div>
                 ))}

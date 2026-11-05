@@ -3,6 +3,8 @@ import { test } from "node:test";
 import { Client, StreamableHTTPClientTransport } from "@modelcontextprotocol/client";
 import { createNutriTrackerMcpHandler, type McpServices } from "../lib/mcp-server";
 
+import { MCP_SCOPES } from "../lib/oauth-config";
+
 const origin = "https://nutritracker.example";
 const endpoint = `${origin}/api/mcp`;
 function fixture(overrides: Parameters<typeof createNutriTrackerMcpHandler>[0] = {}) {
@@ -17,10 +19,10 @@ function fixture(overrides: Parameters<typeof createNutriTrackerMcpHandler>[0] =
       const token = request.headers.get("authorization");
       if (!token?.startsWith("Bearer ")) return null;
       const userId = token.slice(7);
-      return { userId, connectionId: userId, scopes: userId === "read-only" ? ["nutrition:read"] : userId === "write-only" ? ["nutrition:write"] : ["nutrition:read", "nutrition:write"] };
+      return { userId, connectionId: userId, scopes: userId === "read-only" ? ["nutrition:read"] : userId === "write-only" ? ["nutrition:write"] : userId === "legacy" ? ["nutrition:read", "nutrition:write"] : [...MCP_SCOPES] };
     },
     unauthorized: () => new Response(null, { status: 401, headers: { "WWW-Authenticate": `Bearer resource_metadata="${origin}/.well-known/oauth-protected-resource/api/mcp"` } }),
-    rateLimit: async () => true, services, ...overrides,
+    rateLimit: async () => true, services, additionalService: async (name, userId) => { calls.push({ tool: name, userId }); return { username: userId, tool: name }; }, ...overrides,
   });
   return { handle, calls };
 }
@@ -63,7 +65,7 @@ test("legacy Claude protocol initializes and exposes the complete account-scoped
     assert.match(init.result.instructions, /explicitly asks to log/);
   }
   const result = await rpc(await handle(request("tools/list")));
-  assert.equal(result.result.tools.length, 6);
+  assert.equal(result.result.tools.length, 22);
   for (const tool of result.result.tools) {
     assert.ok(tool.name.startsWith("nutritracker_"));
     assert.equal(tool.inputSchema.additionalProperties, false);
@@ -141,8 +143,41 @@ test("official MCP client can connect, discover tools and read an account", asyn
   });
   try {
     await client.connect(transport);
-    assert.equal((await client.listTools()).tools.length, 6);
+    assert.equal((await client.listTools()).tools.length, 22);
     const result = await client.callTool({ name: "nutritracker_get_account", arguments: {} });
     assert.deepEqual(result.structuredContent, { data: { username: "alice", tool: "account" } });
   } finally { await client.close(); }
+});
+
+const extensionInputs: Record<string, object> = {
+  get_workouts: {}, log_workout: { requestId: "a", date: "2026-11-01", completed: true, exercises: [{ exerciseName: "Walk", durationMinutes: 30 }] },
+  update_workout: { requestId: "b", entryId: "a", expectedUpdatedAt: "2026-11-01T00:00:00.000Z", changes: { durationMinutes: 40 } },
+  delete_workout: { requestId: "c", entryId: "a", expectedUpdatedAt: "2026-11-01T00:00:00.000Z" },
+  get_measurements: {}, set_water: { requestId: "d", date: "2026-11-01", glasses: 2, expectedGlasses: 0 },
+  set_weight: { requestId: "e", date: "2026-11-01", weightKg: 75, expectedWeightKg: null },
+  delete_weight: { requestId: "f", date: "2026-11-01", expectedWeightKg: 75 },
+  get_saved_meals: {}, save_meal_preset: { requestId: "g", name: "Lunch", source: { kind: "entries", entryIds: ["a"] } },
+  remove_meal_preset: { requestId: "h", id: "a", expectedUpdatedAt: "2026-11-01T00:00:00.000Z" },
+  log_existing_meal: { requestId: "i", source: { kind: "saved", id: "a" }, date: "2026-11-01", mealType: "LUNCH" },
+  correct_meal_entries: { requestId: "j", entries: [{ action: "remove", entryId: "a", expectedUpdatedAt: "2026-11-01T00:00:00.000Z" }] },
+  get_buddy_meals: {}, share_meal: { requestId: "k", source: { kind: "entries", entryIds: ["a"] }, date: "2026-11-01", mealType: "LUNCH", recipientId: "b", confirmed: true },
+  respond_shared_meal: { requestId: "l", proposalId: "a", action: "decline" },
+};
+test("all new tools reject old grants and bind authorized calls to the current account", async () => {
+  const { handle, calls } = fixture();
+  for (const [name, args] of Object.entries(extensionInputs)) {
+    const denied = await rpc(await handle(request("tools/call", { name: `nutritracker_${name}`, arguments: args }, "legacy")));
+    assert.equal(denied.result.isError, true, name);
+    assert.match(denied.result.content[0].text, /Reconnect NutriTracker/, name);
+  }
+  assert.deepEqual(calls, []);
+  for (const [name, args] of Object.entries(extensionInputs)) {
+    const allowed = await rpc(await handle(request("tools/call", { name: `nutritracker_${name}`, arguments: args }, "bob")));
+    assert.equal(allowed.result.structuredContent.data.username, "bob", name);
+    const rejected = await rpc(await handle(request("tools/call", { name: `nutritracker_${name}`, arguments: { ...args, userId: "alice" } }, "bob")));
+    assert.ok(rejected.error || rejected.result.isError, name);
+  }
+  assert.equal(calls.length, 16);
+  const listed = (await rpc(await handle(request("tools/list")))).result.tools;
+  for (const name of ["share_meal", "respond_shared_meal"]) assert.equal(listed.find((t: {name: string}) => t.name === `nutritracker_${name}`).annotations.openWorldHint, true);
 });

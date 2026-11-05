@@ -48,7 +48,7 @@ export async function getTodayDashboardData(userId: string, today: string) {
     }),
   ]);
 
-  const totalBurned = workouts.reduce((s, e) => s + e.caloriesBurned, 0);
+  const totalBurned = workouts.reduce((s, e) => s + (e.caloriesBurned ?? 0), 0);
 
   // Group today's entries by meal
   const byMeal = new Map<string, typeof entries>();

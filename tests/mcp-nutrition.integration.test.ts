@@ -207,7 +207,7 @@ test("daily and range totals preserve zero snapshots, expose missing nutrition, 
   assert.equal(day.nutritionCompleteForRecordedEntries, false);
   assert.equal(day.fiberCompleteForRecordedEntries, false);
   assert.equal(day.waterGlasses, 3);
-  assert.deepEqual(day.workouts, { count: 1, estimatedCaloriesBurned: 75 });
+  assert.deepEqual(day.workouts, { count: 1, estimatedCaloriesBurned: 75, entriesMissingCalories: 0 });
   const progress = await getMcpProgress(a.id, { endDate: date, days: 7 }, prisma);
   assert.equal(progress.startDate, "2026-10-29");
   assert.equal(progress.daily.length, 7, "Calendar range crosses daylight-saving transition without skipping a date");

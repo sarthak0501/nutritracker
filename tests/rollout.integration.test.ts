@@ -147,7 +147,7 @@ test("reviewed daily logging and MCP SQL preserve old data, match Prisma, and ro
     assert.equal(appliedMcp.status, 0, appliedMcp.stderr);
     assert.deepEqual(await oldRecords(), before, "The MCP rollout changed existing account or nutrition data");
     assert.deepEqual(await recordsFor(dailyTables), beforeMcp, "The MCP rollout changed daily logging data");
-    command(["migrate", "diff", "--from-url", url.toString(), "--to-schema-datamodel", "prisma/schema.prisma", "--exit-code"]);
+
     for (const table of ["OAuthClient", "OAuthConnection", "OAuthAuthorizationCode", "OAuthAccessToken", "OAuthRefreshToken", "OAuthRateLimit"]) {
       const [{ count }] = await db.$queryRawUnsafe<Array<{ count: bigint }>>(`SELECT count(*) AS count FROM ${quote(table)}`);
       assert.equal(count, 0n, `${table} must start empty`);
@@ -163,6 +163,26 @@ test("reviewed daily logging and MCP SQL preserve old data, match Prisma, and ro
     assert.equal(schemaSnapshot(), mcpSchema);
     assert.deepEqual(await oldRecords(), before);
     assert.deepEqual(await recordsFor(dailyTables), beforeMcp);
+    const beforeTracking = await recordsFor(dailyTables);
+    const trackingSql = readFileSync(path.join(root, "prisma/rollouts/20261105_mcp_tracking.sql"), "utf8");
+    const failedTracking = sql(trackingSql.replace(/^COMMIT;\s*$/m, "SELECT 1 / 0;\nCOMMIT;"));
+    assert.notEqual(failedTracking.status, 0);
+    assert.equal(schemaSnapshot(), mcpSchema);
+    const trackingGenerator = (commit: boolean) => {
+      const result = spawnSync(process.execPath, ["scripts/rollout-mcp-tracking.mjs", ...(commit ? ["--commit"] : [])], { cwd: root, env, encoding: "utf8" });
+      assert.equal(result.status, 0, result.stderr);
+      return result.stdout;
+    };
+    const trackingRehearsal = sql(trackingGenerator(false));
+    assert.equal(trackingRehearsal.status, 0, trackingRehearsal.stderr);
+    assert.equal(schemaSnapshot(), mcpSchema);
+    const tracking = sql(trackingGenerator(true));
+    assert.equal(tracking.status, 0, tracking.stderr);
+    assert.deepEqual(await recordsFor(dailyTables), beforeTracking);
+    command(["migrate", "diff", "--from-url", url.toString(), "--to-schema-datamodel", "prisma/schema.prisma", "--exit-code"]);
+    const repeatedTracking = sql(trackingSql);
+    assert.notEqual(repeatedTracking.status, 0);
+    assert.deepEqual(await recordsFor(dailyTables), beforeTracking);
   } finally {
     await db.$disconnect();
     await admin.$executeRawUnsafe(`DROP DATABASE IF EXISTS ${quote(database)}`);

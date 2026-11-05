@@ -47,13 +47,17 @@ Most nutrition apps are calorie calculators. NutriTracker is an **AI nutrition c
 | **Water & workouts** | Built-in trackers; workouts get AI calorie estimates |
 | **Buddies** | Shared daily feed, recipient-reviewed meal proposals, reactions, leaderboard and optional cooperative weekly check-in |
 | **Insights** | Weekly summaries, monthly review, weight & calorie trends, heatmap history |
-| **Claude connector** | Optional remote MCP: connect each person's NutriTracker login, review and log meals, and read personal progress from Claude |
+| **Claude connector** | Optional remote MCP with 22 tools: meals, workouts, water, weigh-ins, saved meals, corrections, progress and recipient-reviewed buddy meals |
 
 ## Use NutriTracker from Claude on your phone
 
-The optional MCP connector runs on the existing NutriTracker server. Each person connects their own NutriTracker account once, then uses Claude on iOS or Android to log meals and check progress. Claude Free currently allows one custom remote connector per account; initial setup is most reliable in Claude's web settings. See [Claude's custom connector guidance](https://support.claude.com/en/articles/11175166-get-started-with-custom-connectors-using-remote-mcp) and [mobile connector guidance](https://support.claude.com/en/articles/11176164-use-connectors-to-extend-claude-s-capabilities).
+The optional MCP connector runs on the existing NutriTracker server. Each person connects their own NutriTracker account, then uses Claude on iOS or Android to track meals, completed workouts, water and body weight, review progress, use saved meals, correct entries and exchange meal proposals with accepted buddies. Claude Free currently allows one custom remote connector per account; initial setup is most reliable in Claude's web settings. See [Claude's custom connector guidance](https://support.claude.com/en/articles/11175166-get-started-with-custom-connectors-using-remote-mcp) and [mobile connector guidance](https://support.claude.com/en/articles/11176164-use-connectors-to-extend-claude-s-capabilities).
 
 This integration is off by default. The database rollout and an HTTPS deployment must be completed before adding `https://<your-nutritracker-host>/api/mcp` to Claude. [Setup, separate account sign-in, supported tools, and rollout instructions](docs/claude-mcp.md) cover the full process. Claude Free usage limits still apply, and new meal estimates use NutriTracker's configured AI provider and its API billing.
+
+After the expanded tracking release is deployed and verified, existing users reconnect with the same URL and approve the additional capabilities. If optional boxes appear, select **Workouts**, **Water and body weight**, **Saved meals and corrections**, and **Buddy meal sharing** as desired. Old connections and token refresh keep their original permissions. Start a new Claude conversation after reconnecting.
+
+The assistant composes repeat-workout requests and combined weekly summaries from ordinary read/write tools. Workout logs require completed exercises; missing calorie values remain unknown. Weigh-ins update dated history without changing profile settings or nutrition targets. The tracking upgrade requires [`20261105_mcp_tracking.sql`](prisma/rollouts/20261105_mcp_tracking.sql), using the guarded rehearsal/apply generator [`scripts/rollout-mcp-tracking.mjs`](scripts/rollout-mcp-tracking.mjs) after a verified private backup. See the [upgrade procedure](docs/claude-mcp.md#existing-mcp-deployment-tracking-upgrade).
 
 ## Tech stack
 
@@ -280,7 +284,7 @@ The LLM client is provider-agnostic and reads config from env, so you can swap C
 - All health data (allergies, conditions, restrictions) lives only in your Neon database — not shared with any third party beyond the LLM call you configured.
 - LLM prompts include profile context for better suggestions; your provider's data-retention policy applies to those calls. Anthropic and OpenAI both offer options to disable training on API usage.
 - Food logs are personal to each user and their approved buddies. Sharing a meal creates a proposal; the recipient chooses their own portion and accepts before entries are added.
-- Connecting Claude shares your requested account summary, meal estimates/logs, and progress with your Claude account. The connector cannot select another NutriTracker user or read a buddy's data. Review and revoke individual grants at `/connections`; NutriTracker passwords are entered on NutriTracker's sign-in page.
+- Connecting Claude shares the records covered by your approved permissions with your Claude account. Additional capabilities have separate workout, wellness, meal-library and sharing scopes. Buddy access covers accepted buddy identities and permitted meal proposals; sharing requires recipient acceptance before logging. Review and revoke individual grants at `/connections`; NutriTracker passwords are entered on NutriTracker's sign-in page.
 - Unfinished meal drafts are saved on this device for up to 24 hours and cleared on logout or explicit discard. Storage is scoped to account, date and entry mode. No offline save queue is enabled.
 - Known meals and manual entries do not call an AI provider. This release does not change the configured model or provider.
 

@@ -21,7 +21,29 @@ export function getMcpConfig() {
   return { enabled, origin: url.origin, resource: `${url.origin}/api/mcp` };
 }
 
-export const MCP_SCOPES = ["nutrition:read", "nutrition:write"] as const;
+export const MCP_SCOPES = ["nutrition:read", "nutrition:write", "workouts:read", "workouts:write", "wellness:read", "wellness:write", "meals:read", "meals:write", "sharing:read", "sharing:write"] as const;
+export type McpScope = typeof MCP_SCOPES[number];
+export const MCP_SCOPE_DESCRIPTIONS: Record<McpScope, string> = {
+  "nutrition:read": "Read your account name, nutrition targets, meals, and progress.",
+  "nutrition:write": "Estimate and log meals, and undo recent assistant meal saves.",
+  "workouts:read": "Read your exercises, sets, reps, weights, duration, and workout history.",
+  "workouts:write": "Log, correct, and remove your workout records.",
+  "wellness:read": "Read your water log and body-weight history.",
+  "wellness:write": "Record and correct your water and body weight.",
+  "meals:read": "Read your saved meals and food entries for corrections.",
+  "meals:write": "Save and log reusable meals, and correct or remove your food entries.",
+  "sharing:read": "Read your accepted buddy names and meal proposals shared with you.",
+  "sharing:write": "Send meals to your accepted buddies, and accept or decline meals shared with you.",
+};
+export const MCP_OPTIONAL_CAPABILITIES: ReadonlyArray<{ key: string; label: string; scopes: readonly McpScope[] }> = [
+  { key: "workouts", label: "Workouts", scopes: ["workouts:read", "workouts:write"] },
+  { key: "wellness", label: "Water and body weight", scopes: ["wellness:read", "wellness:write"] },
+  { key: "meals", label: "Saved meals and corrections", scopes: ["meals:read", "meals:write"] },
+  { key: "sharing", label: "Buddy meal sharing", scopes: ["sharing:read", "sharing:write"] },
+];
+export function optionalConsentScopes(requested: readonly string[]): McpScope[] {
+  return MCP_OPTIONAL_CAPABILITIES.flatMap(group => group.scopes).filter(scope => !requested.includes(scope));
+}
 
 export function allowedRedirectUris(): string[] {
   const redirects = ["https://claude.ai/api/mcp/auth_callback", ...(process.env.MCP_ALLOWED_REDIRECT_URIS ?? "").split(",").map(value => value.trim()).filter(Boolean)];

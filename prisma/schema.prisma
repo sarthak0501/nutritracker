@@ -65,11 +65,24 @@ model User {
   weeklyCheckIns         WeeklyCheckIn[]
   oauthConnections       OAuthConnection[]
   oauthAuthorizationCodes OAuthAuthorizationCode[]
+  mcpMutations McpMutation[]
 
   @@index([username])
 }
 
 // OAuth credentials are opaque; only SHA-256 hashes are persisted.
+model McpMutation {
+  id String @id @default(cuid())
+  userId String
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  requestId String
+  operation String
+  inputHash String
+  result Json
+  createdAt DateTime @default(now())
+  @@unique([userId, requestId])
+}
+
 model OAuthClient {
   id           String   @id @default(cuid())
   registrationKey String @unique
@@ -369,7 +382,7 @@ model WorkoutEntry {
   reps            Int?
   weightKg        Float?
 
-  caloriesBurned  Float
+  caloriesBurned  Float?
   isEstimated     Boolean  @default(false)
   sourceText      String?
   estimationMeta  Json?

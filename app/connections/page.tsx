@@ -2,7 +2,7 @@ import Link from "next/link";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { requireSession } from "@/lib/session";
-import { getMcpConfig } from "@/lib/oauth-config";
+import { getMcpConfig, MCP_SCOPE_DESCRIPTIONS, type McpScope } from "@/lib/oauth-config";
 import { disconnectAssistant } from "./actions";
 export const dynamic = "force-dynamic";
 export default async function ConnectionsPage() {
@@ -21,7 +21,7 @@ export default async function ConnectionsPage() {
     {enabled && !connections.length && <p>No assistants are connected. Start the connection from Claude and sign in with this NutriTracker account.</p>}
     {connections.map(connection => <section key={connection.id} className="space-y-3 rounded-2xl bg-surface-card p-5 shadow-card">
       <h2 className="font-bold">{connection.client.name}</h2>
-      <p className="text-sm">{connection.scopes.includes("nutrition:read") ? "Can read your nutrition and progress. " : ""}{connection.scopes.includes("nutrition:write") ? "Can prepare and log meals, and undo recent meal batches." : ""}</p>
+      <ul className="list-disc space-y-1 pl-5 text-sm">{connection.scopes.map(scope => <li key={scope}>{MCP_SCOPE_DESCRIPTIONS[scope as McpScope] ?? scope}</li>)}</ul>
       <p className="text-sm text-gray-600">Connected {connection.createdAt.toISOString().slice(0, 10)} · Expires {connection.expiresAt.toISOString().slice(0, 10)}</p>
       <form action={disconnectAssistant}><input type="hidden" name="connectionId" value={connection.id} /><button className="rounded-xl border border-red-200 px-4 py-2 font-semibold text-red-700">Disconnect</button></form>
     </section>)}

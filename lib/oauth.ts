@@ -3,7 +3,7 @@ import { SignJWT, jwtVerify } from "jose";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { consumeMcpRateLimit, hashCredential } from "@/lib/mcp-auth";
-import { allowedRedirectUris, getMcpConfig, MCP_SCOPES } from "@/lib/oauth-config";
+import { allowedRedirectUris, getMcpConfig, MCP_OPTIONAL_CAPABILITIES, MCP_SCOPES, optionalConsentScopes } from "@/lib/oauth-config";
 
 const MINUTE = 60_000;
 const DAY = 24 * 60 * MINUTE;
@@ -105,11 +105,13 @@ function consentSecret(): Uint8Array {
   // Separate signing domains: a consent JWT must never be a browser session JWT.
   return createHmac("sha256", value).update("nutritracker:oauth-consent:v1").digest();
 }
-export async function signConsent(userId: string, request: AuthorizationRequest) {
+export async function signConsent(userId: string, request: AuthorizationRequest, offeredScopes: string[] = []) {
   const config = requireMcpEnabled();
-  return new SignJWT({ request }).setProtectedHeader({ alg: "HS256", typ: "JWT" }).setSubject(userId).setIssuer(config.origin).setAudience("nutritracker-oauth-consent").setJti(randomBytes(32).toString("base64url")).setIssuedAt().setExpirationTime("10m").sign(consentSecret());
+  const allowed = optionalConsentScopes(request.scopes);
+  if (offeredScopes.some(scope => !allowed.includes(scope as typeof allowed[number]))) throw new OAuthError("invalid_scope", "The optional permission offer is invalid.");
+  return new SignJWT({ request, offeredScopes: [...new Set(offeredScopes)] }).setProtectedHeader({ alg: "HS256", typ: "JWT" }).setSubject(userId).setIssuer(config.origin).setAudience("nutritracker-oauth-consent").setJti(randomBytes(32).toString("base64url")).setIssuedAt().setExpirationTime("10m").sign(consentSecret());
 }
-export async function readConsent(token: string, userId: string): Promise<{ request: AuthorizationRequest; consentId: string }> {
+export async function readConsent(token: string, userId: string): Promise<{ request: AuthorizationRequest; consentId: string; offeredScopes: string[] }> {
   const config = requireMcpEnabled();
   try {
     const { payload } = await jwtVerify(token, consentSecret(), { algorithms: ["HS256"], issuer: config.origin, audience: "nutritracker-oauth-consent" });
@@ -118,7 +120,11 @@ export async function readConsent(token: string, userId: string): Promise<{ requ
     // Validate against current registration/config as well as the signed payload.
     const params = new URLSearchParams({ client_id: request.clientId, redirect_uri: request.redirectUri, response_type: "code", resource: request.resource, code_challenge: request.codeChallenge, code_challenge_method: "S256", scope: request.scopes.join(" ") });
     if (request.state !== null) params.set("state", request.state);
-    return { request: await validateAuthorizationRequest(params), consentId: payload.jti };
+    const validated = await validateAuthorizationRequest(params);
+    const offeredScopes = payload.offeredScopes ?? [];
+    const allowed = optionalConsentScopes(validated.scopes);
+    if (!Array.isArray(offeredScopes) || offeredScopes.some(scope => typeof scope !== "string" || !allowed.includes(scope as typeof allowed[number]))) throw new Error("Invalid optional permissions");
+    return { request: validated, consentId: payload.jti, offeredScopes: [...new Set(offeredScopes as string[])] };
   } catch { throw new OAuthError("invalid_request", "This connection request expired or belongs to another account. Start again from Claude."); }
 }
 export function authorizationRedirect(request: AuthorizationRequest, values: Record<string, string>) {
@@ -127,11 +133,26 @@ export function authorizationRedirect(request: AuthorizationRequest, values: Rec
   if (request.state !== null) url.searchParams.set("state", request.state);
   return url.toString();
 }
-export async function approveConsent(userId: string, signedConsent: string): Promise<string> {
-  const { request, consentId } = await readConsent(signedConsent, userId);
+export function selectedConsentScopes(form: URLSearchParams, offeredScopes: string[]): string[] {
+  const selected: string[] = [];
+  for (const group of MCP_OPTIONAL_CAPABILITIES) {
+    const value = form.get(`allow_${group.key}`);
+    if (value === null) continue;
+    if (value !== "yes") throw new OAuthError("invalid_scope", "The permission selection is invalid.");
+    const available = group.scopes.filter(scope => offeredScopes.includes(scope));
+    if (!available.length) throw new OAuthError("invalid_scope", "This connection did not offer the selected permissions.");
+    selected.push(...available);
+  }
+  for (const key of form.keys()) if (key.startsWith("allow_") && !MCP_OPTIONAL_CAPABILITIES.some(group => key === `allow_${group.key}`)) throw new OAuthError("invalid_scope", "Unknown permission selection.");
+  return selected;
+}
+export async function approveConsent(userId: string, signedConsent: string, selectedScopes: string[] = []): Promise<string> {
+  const { request, consentId, offeredScopes } = await readConsent(signedConsent, userId);
+  if (selectedScopes.some(scope => !offeredScopes.includes(scope))) throw new OAuthError("invalid_scope", "Approve only permissions offered on this connection page.");
+  const scopes = [...new Set([...request.scopes, ...selectedScopes])];
   const code = `ntc_${randomBytes(32).toString("base64url")}`;
   try {
-    await prisma.oAuthAuthorizationCode.create({ data: { hash: hashCredential(code), consentId, userId, clientId: request.clientId, redirectUri: request.redirectUri, codeChallenge: request.codeChallenge, scopes: request.scopes, resource: request.resource, expiresAt: new Date(Date.now() + 5 * MINUTE) } });
+    await prisma.oAuthAuthorizationCode.create({ data: { hash: hashCredential(code), consentId, userId, clientId: request.clientId, redirectUri: request.redirectUri, codeChallenge: request.codeChallenge, scopes, resource: request.resource, expiresAt: new Date(Date.now() + 5 * MINUTE) } });
   } catch (error) {
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") throw new OAuthError("invalid_request", "This consent was already submitted. Start a new connection from Claude.");
     throw error;
