@@ -27,13 +27,16 @@ New meal estimates use that provider; reading existing progress does not call it
 An administrator must first finish the deployment steps below. Use the same
 public MCP URL for both people; do not create a shared login.
 
-1. Sign in to your own Claude account at `claude.ai`. Open **Settings →
-   Connectors → Add custom connector**. If your Free account already has a
+1. Sign in to your own Claude account at `claude.ai`. Open **Customize →
+   Connectors → + Add → Add custom connector** (some versions place Connectors
+   in Settings). If your Free account already has a
    custom connector, its one-connector allowance must be available.
 2. Name it **NutriTracker**. Enter the URL
-   `https://<your-nutritracker-host>/api/mcp`. Leave advanced client ID and
-   client secret fields empty: this server supports automatic client
-   registration.
+   `https://<your-nutritracker-host>/api/mcp`. Continue through the detected
+   authentication settings. Choose **Sign in now** and, if an OAuth client
+   choice is shown, **Register automatically**. Leave request headers and any
+   manual client ID/client secret fields empty. This server uses automatic
+   registration, rather than a Client ID Metadata Document.
 3. Choose **Connect**. Claude opens NutriTracker's sign-in/permission page.
    Enter your existing NutriTracker username and password **on NutriTracker**.
    Complete your NutriTracker profile if this is a new account.
