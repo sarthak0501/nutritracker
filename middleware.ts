@@ -13,7 +13,10 @@ export async function middleware(req: NextRequest) {
   if (publicMcpPaths.has(pathname)) {
     const response = NextResponse.next();
     response.headers.set("Cache-Control", "no-store");
-    response.headers.set("Referrer-Policy", "no-referrer");
+    // Native form POSTs under no-referrer send Origin: null. The consent page
+    // must retain its origin for the strict CSRF check, without exposing its URL.
+    // Keep no-referrer on the consent response that redirects back to Claude.
+    response.headers.set("Referrer-Policy", pathname === "/oauth/authorize" ? "strict-origin" : "no-referrer");
     response.headers.set("Content-Security-Policy", "frame-ancestors 'none'");
     response.headers.set("X-Frame-Options", "DENY");
     return response;

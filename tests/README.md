@@ -34,7 +34,8 @@ Prepare the private fixture database, then run `scripts/seed-ui-fixture.mjs` wit
 the fixture `DATABASE_URL` printed by `node scripts/test-db.mjs url`. Start Next
 on `localhost:3091` with that same fixture URL, a test-only `AUTH_SECRET` of at
 least 32 characters, `MCP_ENABLED=true`,
-`MCP_PUBLIC_URL=http://localhost:3091`, and `LLM_ENABLED=false`:
+`MCP_PUBLIC_URL=http://localhost:3091`,
+`MCP_ALLOWED_REDIRECT_URIS=http://127.0.0.1:3092/callback`, and `LLM_ENABLED=false`:
 
 ```sh
 npm run dev -- --hostname localhost --port 3091
@@ -44,12 +45,27 @@ Supply those same environment values in a second terminal and run:
 
 ```sh
 node --import tsx scripts/mcp-browser-smoke.ts
+# Reseed the synthetic QA accounts before repeating with the Safari engine.
+node scripts/seed-ui-fixture.mjs
+MCP_TEST_BROWSER=webkit node --import tsx scripts/mcp-browser-smoke.ts
 ```
+
+Install the engines with `npx playwright install chromium webkit` if needed.
+The script receives OAuth redirects on a local-only callback server and submits
+the consent form through the actual browser network stack. It never reconstructs
+the consent POST with `route.fetch`. One account reloads the consent document
+before submitting; the other submits directly after login. It checks the native
+Origin header and verifies that the callback receives no referrer.
+WebKit can hide the intermediate cross-site 303 response with `Frame load
+interrupted`; the test permits only that exact signal and still requires the
+real callback, matching state, authorization code, successful token exchange,
+and correct account identity. Chromium also checks the 303 response headers.
 
 The script verifies six flows using two separate 390px browser contexts,
 including consent, isolated accounts, progress, fixture meal save/Undo, token
 refresh, and revocation. Validation on 2026-11-04 passed 29 unit tests,
-38 database integration tests, these six browser flows, and the production
+38 database integration tests, these six browser flows in both Chromium and
+WebKit (including full-document consent reloads), and the production
 build. Lint had only existing warnings. This tests a local browser and MCP
 protocol client; native Claude phone-app behavior has not been tested.
 
