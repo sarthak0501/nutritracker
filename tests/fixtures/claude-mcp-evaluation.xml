@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<evaluation>
+  <qa_pair>
+    <question>Use only read tools. Check the connected account, inspect its progress from 2026-10-26 through 2026-11-01, and open the date with the most recorded calories. Which connected username owns that daily log? Answer with the username only.</question>
+    <answer>mcp-eval-jordan</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>Use only read tools. Inspect progress from 2026-10-26 through 2026-11-01, locate the date with an entry missing calorie and macro nutrition, and open that date's food log. Can its remaining calorie budget be calculated for all recorded food? Answer Known or Unknown only.</question>
+    <answer>Unknown</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>Use only read tools. Inspect progress from 2026-10-26 through 2026-11-01, then open the two dates with the highest recorded calorie totals to check their entries. How many more recorded calories are on the higher date than the other? Answer with an integer only.</question>
+    <answer>200</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>Use only read tools. Inspect progress from 2026-10-26 through 2026-11-01 to find a date with food entries and zero recorded calories. Open that day and distinguish valid zero nutrition from missing nutrition. What is the name of the food with valid zero nutrition? Answer with the food name only.</question>
+    <answer>Sparkling water</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>Use only read tools. Read the connected account's calorie target and its food and workout details for 2026-10-30. How many calories remain against its food target, keeping exercise calories separate? Answer with an integer only.</question>
+    <answer>900</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>Use only read tools. Read progress for 2026-10-26 through 2026-11-01, then inspect both the logged zero-calorie date and the date containing unknown nutrition. With both counted as logged dates, what server-reported average of known recorded calories per logged day applies to this week? This is not a claim of complete intake. Answer with an integer only.</question>
+    <answer>740</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>Use only read tools. Read progress for 2026-10-26 through 2026-11-01 and open each date reported without food entries to verify its log. How many dates have no food entries, regardless of water or workouts? Do not interpret them as days without eating. Answer with an integer only.</question>
+    <answer>2</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>Use only read tools. Inspect progress for 2026-10-26 through 2026-11-01, then open the dates with incomplete fiber information. Which date has both missing fiber and an entry missing core calorie and macro nutrition? Answer YYYY-MM-DD only.</question>
+    <answer>2026-10-27</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>Use only read tools. Compare progress from 2026-10-26 through 2026-11-01, restricting attention to dates whose recorded entries all have calorie and macro nutrition. Open the date with the highest recorded protein total. What is the meal name on that date? Answer with the meal name only.</question>
+    <answer>Harvest dinner</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>Use only read tools. Check the account's default timezone, then open the food logs for 2026-10-31 and 2026-11-01 using that calendar. What is their combined known recorded calorie total? A date without entries does not establish zero actual intake. Answer with an integer only.</question>
+    <answer>800</answer>
+  </qa_pair>
+</evaluation>

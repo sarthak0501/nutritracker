@@ -47,6 +47,13 @@ Most nutrition apps are calorie calculators. NutriTracker is an **AI nutrition c
 | **Water & workouts** | Built-in trackers; workouts get AI calorie estimates |
 | **Buddies** | Shared daily feed, recipient-reviewed meal proposals, reactions, leaderboard and optional cooperative weekly check-in |
 | **Insights** | Weekly summaries, monthly review, weight & calorie trends, heatmap history |
+| **Claude connector** | Optional remote MCP: connect each person's NutriTracker login, review and log meals, and read personal progress from Claude |
+
+## Use NutriTracker from Claude on your phone
+
+The optional MCP connector runs on the existing NutriTracker server. Each person connects their own NutriTracker account once, then uses Claude on iOS or Android to log meals and check progress. Claude Free currently allows one custom remote connector per account; initial setup is most reliable in Claude's web settings. See [Claude's custom connector guidance](https://support.claude.com/en/articles/11175166-get-started-with-custom-connectors-using-remote-mcp) and [mobile connector guidance](https://support.claude.com/en/articles/11176164-use-connectors-to-extend-claude-s-capabilities).
+
+This integration is off by default. The database rollout and an HTTPS deployment must be completed before adding `https://<your-nutritracker-host>/api/mcp` to Claude. [Setup, separate account sign-in, supported tools, and rollout instructions](docs/claude-mcp.md) cover the full process. Claude Free usage limits still apply, and new meal estimates use NutriTracker's configured AI provider and its API billing.
 
 ## Tech stack
 
@@ -189,6 +196,9 @@ Visit your Vercel URL, log in, finish onboarding. Done.
 | `DATABASE_URL` | ✅ | Neon Postgres pooled connection string |
 | `AUTH_SECRET` | ✅ | JWT signing secret (32+ random bytes) |
 | `NEXTAUTH_URL` | only if Vercel doesn't auto-detect | Your deployed URL |
+| `MCP_ENABLED` | optional | Explicit `true` enables the remote Claude connector; defaults to off |
+| `MCP_PUBLIC_URL` | when MCP enabled | Canonical HTTPS origin only, e.g. `https://your-app.vercel.app` |
+| `MCP_ALLOWED_REDIRECT_URIS` | optional | Extra exact OAuth callback URLs, comma-separated; Claude's callback is already allowed |
 | `LLM_ENABLED` | ✅ | `true` to enable AI features |
 | `LLM_PROVIDER` | ✅ | `anthropic` or `openai` |
 | `LLM_API_KEY` | ✅ | Provider API key |
@@ -244,7 +254,7 @@ npx prisma db push          # applies to DB without migrations (simpler on Neon)
 npx prisma generate         # regenerates client
 ```
 
-The original database was created with `prisma db push` and has no baseline migration history. Use `db push` only for a new or disposable development database. For an existing deployment, back up first and apply a reviewed additive SQL rollout before the matching app deploy. See [daily logging rollout and rollback](docs/daily-logging-rollout.md). Never reset an existing database to adopt migration history.
+The original database was created with `prisma db push` and has no baseline migration history. Use `db push` only for a new or disposable development database. For an existing deployment, back up first and apply a reviewed additive SQL rollout before the matching app deploy. See [daily logging rollout and rollback](docs/daily-logging-rollout.md) and [Claude MCP rollout and rollback](docs/claude-mcp.md#deployment-and-database-rollout). Never reset an existing database to adopt migration history.
 
 ---
 
@@ -270,6 +280,7 @@ The LLM client is provider-agnostic and reads config from env, so you can swap C
 - All health data (allergies, conditions, restrictions) lives only in your Neon database — not shared with any third party beyond the LLM call you configured.
 - LLM prompts include profile context for better suggestions; your provider's data-retention policy applies to those calls. Anthropic and OpenAI both offer options to disable training on API usage.
 - Food logs are personal to each user and their approved buddies. Sharing a meal creates a proposal; the recipient chooses their own portion and accepts before entries are added.
+- Connecting Claude shares your requested account summary, meal estimates/logs, and progress with your Claude account. The connector cannot select another NutriTracker user or read a buddy's data. Review and revoke individual grants at `/connections`; NutriTracker passwords are entered on NutriTracker's sign-in page.
 - Unfinished meal drafts are saved on this device for up to 24 hours and cleared on logout or explicit discard. Storage is scoped to account, date and entry mode. No offline save queue is enabled.
 - Known meals and manual entries do not call an AI provider. This release does not change the configured model or provider.
 
