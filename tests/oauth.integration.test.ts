@@ -111,8 +111,12 @@ test("signed consent is user-bound, tamper resistant and single-use", async () =
   await assert.rejects(readConsent(`${auth.consent.slice(0, -12)}tampered`, firstUser), isOAuth("invalid_request"));
   await approveConsent(firstUser, auth.consent);
   await assert.rejects(approveConsent(firstUser, auth.consent), isOAuth("invalid_request"));
-  const badOrigin = await consentRoute(new Request(`${origin}/oauth/consent`, { method: "POST", headers: { Origin: "https://evil.invalid", "Content-Type": "application/x-www-form-urlencoded" }, body: new URLSearchParams({ consent: auth.consent, decision: "allow" }) }));
-  assert.equal(badOrigin.status, 403);
+  for (const requestOrigin of ["https://evil.invalid", "null", undefined]) {
+    const headers = new Headers({ "Content-Type": "application/x-www-form-urlencoded" });
+    if (requestOrigin !== undefined) headers.set("Origin", requestOrigin);
+    const badOrigin = await consentRoute(new Request(`${origin}/oauth/consent`, { method: "POST", headers, body: new URLSearchParams({ consent: auth.consent, decision: "allow" }) }));
+    assert.equal(badOrigin.status, 403);
+  }
 });
 
 test("consent and malformed JWTs cannot impersonate browser sessions", async () => {
@@ -132,9 +136,10 @@ test("middleware exposes only the exact protocol routes and rejects a consent co
   const forbidden = await middleware(new NextRequest(`${origin}/connections`, { headers: { cookie: `nt_session=${consent}` } }));
   assert.equal(forbidden.status, 307);
   assert.equal(new URL(forbidden.headers.get("location")!).pathname, "/login");
-  for (const path of ["/api/mcp", "/oauth/token", "/.well-known/oauth-protected-resource/api/mcp"]) {
+  for (const path of ["/api/mcp", "/oauth/token", "/oauth/authorize", "/oauth/consent", "/.well-known/oauth-protected-resource/api/mcp"]) {
     const publicRoute = await middleware(new NextRequest(`${origin}${path}`));
     assert.equal(publicRoute.headers.get("x-middleware-next"), "1");
+    assert.equal(publicRoute.headers.get("referrer-policy"), path === "/oauth/authorize" ? "strict-origin" : "no-referrer");
   }
   for (const path of ["/api/mcp/admin", "/oauth/admin", "/api/foods"]) {
     const privateRoute = await middleware(new NextRequest(`${origin}${path}`));
