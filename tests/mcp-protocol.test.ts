@@ -50,8 +50,18 @@ test("authentication is required for all transport methods; cookies do not grant
 
 test("disabled endpoint, invalid origins, stateless methods and rate limits fail closed", async () => {
   assert.equal((await fixture({ config: () => ({ enabled: false, origin, resource: endpoint }) }).handle(request("tools/list"))).status, 404);
-  const badOrigin = request("tools/list"); badOrigin.headers.set("origin", "https://evil.example");
-  assert.equal((await fixture().handle(badOrigin)).status, 403);
+  const { handle } = fixture();
+  for (const allowed of ["https://claude.ai", "https://chatgpt.com"]) {
+    const authenticated = request("tools/list");
+    authenticated.headers.set("origin", allowed);
+    assert.equal((await handle(authenticated)).status, 200);
+    assert.equal((await handle(new Request(endpoint, { headers: { origin: allowed } }))).status, 401);
+  }
+  for (const rejected of ["https://evil.example", "https://chatgpt.com.example", "null"]) {
+    const untrusted = request("tools/list");
+    untrusted.headers.set("origin", rejected);
+    assert.equal((await handle(untrusted)).status, 403);
+  }
   for (const method of ["GET", "DELETE"]) assert.equal((await fixture().handle(new Request(endpoint, { method, headers: { authorization: "Bearer alice" } }))).status, 405);
   const limited = await fixture({ rateLimit: async () => false }).handle(request("tools/list"));
   assert.equal(limited.status, 429); assert.equal(limited.headers.get("retry-after"), "60");

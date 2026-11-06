@@ -8,7 +8,7 @@ import { prisma } from "../lib/db";
 import { getSessionSecret, verifySessionToken } from "../lib/auth-token";
 import { authenticateMcpRequest, consumeMcpRateLimit, hashCredential, mcpUnauthorized } from "../lib/mcp-auth";
 import { allowedRedirectUris, getMcpConfig, MCP_SCOPES, optionalConsentScopes, safeOAuthReturn } from "../lib/oauth-config";
-import { approveConsent, authorizationMetadata, exchangeOAuthToken, OAuthError, protectedResourceMetadata, readConsent, registerOAuthClient, revokeOAuthToken, revokeUserConnection, selectedConsentScopes, signConsent, validateAuthorizationRequest } from "../lib/oauth";
+import { approveConsent, authorizationMetadata, authorizationRedirect, exchangeOAuthToken, OAuthError, protectedResourceMetadata, readConsent, registerOAuthClient, revokeOAuthToken, revokeUserConnection, selectedConsentScopes, signConsent, validateAuthorizationRequest } from "../lib/oauth";
 import { POST as registerRoute } from "../app/oauth/register/route";
 import { POST as tokenRoute } from "../app/oauth/token/route";
 import { POST as consentRoute } from "../app/oauth/consent/route";
@@ -53,9 +53,9 @@ after(async () => {
   await prisma.$disconnect();
   for (const [key, value] of Object.entries(original)) { if (value === undefined) delete process.env[key]; else process.env[key] = value; }
 });
-async function authorization(userId = firstUser, scope = "nutrition:read nutrition:write") {
+async function authorization(userId = firstUser, scope = "nutrition:read nutrition:write", registered = { id: clientId, uri: callback }) {
   const verifier = randomBytes(48).toString("base64url");
-  const params = new URLSearchParams({ client_id: clientId, redirect_uri: callback, response_type: "code", resource, code_challenge: createHash("sha256").update(verifier).digest("base64url"), code_challenge_method: "S256", state: `state & ${randomUUID()}`, scope });
+  const params = new URLSearchParams({ client_id: registered.id, redirect_uri: registered.uri, response_type: "code", resource, code_challenge: createHash("sha256").update(verifier).digest("base64url"), code_challenge_method: "S256", state: `state & ${randomUUID()}`, scope });
   const request = await validateAuthorizationRequest(params);
   const consent = await signConsent(userId, request);
   return { verifier, params, request, consent, userId };
@@ -94,6 +94,45 @@ test("registration rejects arbitrary redirects and untrusted client identity", a
   assert.equal(repeated.client_id, clientId);
   assert.equal(repeated.client_name, "Configured assistant");
   assert.ok(allowedRedirectUris().includes("https://claude.ai/api/mcp/auth_callback"));
+});
+
+test("ChatGPT's exact stable callback supports public registration, issuer identification and PKCE exchange", async () => {
+  const uri = "https://chatgpt.com/connector_platform_oauth_redirect";
+  const metadata = authorizationMetadata();
+  assert.equal(metadata.authorization_response_iss_parameter_supported, true);
+  assert.deepEqual(protectedResourceMetadata().authorization_servers, [metadata.issuer]);
+  for (const lookalike of [`${uri}/`, `${uri}?to=elsewhere`, uri.replace("chatgpt.com", "chatgpt.com.evil.invalid")]) {
+    await assert.rejects(registerOAuthClient({ redirect_uris: [lookalike] }), isOAuth("invalid_redirect_uri"));
+  }
+  const registration = await registerRoute(new Request(metadata.registration_endpoint, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ client_name: "An untrusted name", redirect_uris: [uri], token_endpoint_auth_method: "none", grant_types: ["authorization_code", "refresh_token"], response_types: ["code"] }),
+  }));
+  assert.equal(registration.status, 201);
+  const client = await registration.json();
+  clientIds.push(client.client_id);
+  assert.equal(client.client_name, "ChatGPT");
+  assert.equal(client.token_endpoint_auth_method, "none");
+  assert.equal(client.client_secret, undefined);
+  const auth = await authorization(firstUser, "nutrition:read", { id: client.client_id, uri });
+  const approved = new URL(await approveConsent(firstUser, auth.consent));
+  const denied = new URL(authorizationRedirect(auth.request, { error: "access_denied" }));
+  for (const response of [approved, denied]) {
+    assert.equal(response.origin + response.pathname, uri);
+    assert.deepEqual(response.searchParams.getAll("iss"), [metadata.issuer]);
+    assert.equal(response.searchParams.get("state"), auth.request.state);
+  }
+  assert.equal(denied.searchParams.get("code"), null);
+  assert.equal(denied.searchParams.get("error"), "access_denied");
+  const tokenForm = new URLSearchParams({ grant_type: "authorization_code", client_id: client.client_id, code: approved.searchParams.get("code")!, code_verifier: auth.verifier, resource, redirect_uri: uri });
+  const substituted = new URLSearchParams(tokenForm);
+  substituted.set("redirect_uri", "https://claude.ai/api/mcp/auth_callback");
+  await assert.rejects(exchangeOAuthToken(substituted), isOAuth("invalid_grant"));
+  const token = await tokenRoute(new Request(metadata.token_endpoint, { method: "POST", body: tokenForm }));
+  assert.equal(token.status, 200);
+  const identity = await access((await token.json()).access_token);
+  assert.equal(identity?.userId, firstUser);
+  assert.deepEqual(identity?.scopes, ["nutrition:read"]);
 });
 
 test("authorization rejects missing PKCE, wrong resource, duplicate and unregistered parameters", async () => {

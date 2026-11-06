@@ -134,7 +134,7 @@ export function createNutriTrackerMcpHandler(overrides: Partial<Dependencies> = 
       const config = deps.config();
       if (!config.enabled) return Response.json({ error: "not_found" }, { status: 404 });
       const origin = request.headers.get("origin");
-      if (origin && origin !== config.origin && origin !== "https://claude.ai") {
+      if (origin && ![config.origin, "https://claude.ai", "https://chatgpt.com"].includes(origin)) {
         return Response.json({ error: "invalid_origin" }, { status: 403 });
       }
       const principal = await deps.authenticate(request);

@@ -3,7 +3,7 @@ import { SignJWT, jwtVerify } from "jose";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { consumeMcpRateLimit, hashCredential } from "@/lib/mcp-auth";
-import { allowedRedirectUris, getMcpConfig, MCP_OPTIONAL_CAPABILITIES, MCP_SCOPES, optionalConsentScopes } from "@/lib/oauth-config";
+import { allowedRedirectUris, ASSISTANT_CALLBACKS, getMcpConfig, MCP_OPTIONAL_CAPABILITIES, MCP_SCOPES, optionalConsentScopes } from "@/lib/oauth-config";
 
 const MINUTE = 60_000;
 const DAY = 24 * 60 * MINUTE;
@@ -78,8 +78,8 @@ export async function registerOAuthClient(body: unknown) {
   const redirectUris = [...new Set(uris as string[])].sort();
   const registrationKey = hashCredential(JSON.stringify(redirectUris));
   // Client name/logo/URLs are untrusted and are neither fetched nor used as identity.
-  const name = redirectUris.every(uri => uri === "https://claude.ai/api/mcp/auth_callback") ? "Claude" : "Configured assistant";
-  const client = await prisma.oAuthClient.upsert({ where: { registrationKey }, create: { registrationKey, name, redirectUris }, update: {} });
+  const name = (redirectUris.length === 1 && ASSISTANT_CALLBACKS[redirectUris[0]]) || "Configured assistant";
+  const client = await prisma.oAuthClient.upsert({ where: { registrationKey }, create: { registrationKey, name, redirectUris }, update: { name } });
   return { client_id: client.id, client_id_issued_at: Math.floor(client.createdAt.getTime() / 1000), client_name: client.name, redirect_uris: client.redirectUris, token_endpoint_auth_method: "none", grant_types: ["authorization_code", "refresh_token"], response_types: ["code"], scope: MCP_SCOPES.join(" ") };
 }
 
@@ -125,12 +125,14 @@ export async function readConsent(token: string, userId: string): Promise<{ requ
     const allowed = optionalConsentScopes(validated.scopes);
     if (!Array.isArray(offeredScopes) || offeredScopes.some(scope => typeof scope !== "string" || !allowed.includes(scope as typeof allowed[number]))) throw new Error("Invalid optional permissions");
     return { request: validated, consentId: payload.jti, offeredScopes: [...new Set(offeredScopes as string[])] };
-  } catch { throw new OAuthError("invalid_request", "This connection request expired or belongs to another account. Start again from Claude."); }
+  } catch { throw new OAuthError("invalid_request", "This connection request expired or belongs to another account. Start again from your assistant."); }
 }
 export function authorizationRedirect(request: AuthorizationRequest, values: Record<string, string>) {
   const url = new URL(request.redirectUri);
   for (const [key, value] of Object.entries(values)) url.searchParams.set(key, value);
   if (request.state !== null) url.searchParams.set("state", request.state);
+  // RFC 9207 identifies our server on every callback, including a denial.
+  url.searchParams.set("iss", requireMcpEnabled().origin);
   return url.toString();
 }
 export function selectedConsentScopes(form: URLSearchParams, offeredScopes: string[]): string[] {
@@ -154,7 +156,7 @@ export async function approveConsent(userId: string, signedConsent: string, sele
   try {
     await prisma.oAuthAuthorizationCode.create({ data: { hash: hashCredential(code), consentId, userId, clientId: request.clientId, redirectUri: request.redirectUri, codeChallenge: request.codeChallenge, scopes, resource: request.resource, expiresAt: new Date(Date.now() + 5 * MINUTE) } });
   } catch (error) {
-    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") throw new OAuthError("invalid_request", "This consent was already submitted. Start a new connection from Claude.");
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") throw new OAuthError("invalid_request", "This consent was already submitted. Start a new connection from your assistant.");
     throw error;
   }
   return authorizationRedirect(request, { code });
@@ -222,7 +224,7 @@ export async function revokeUserConnection(userId: string, connectionId: string)
 }
 export function authorizationMetadata() {
   const { origin } = requireMcpEnabled();
-  return { issuer: origin, authorization_endpoint: `${origin}/oauth/authorize`, token_endpoint: `${origin}/oauth/token`, registration_endpoint: `${origin}/oauth/register`, revocation_endpoint: `${origin}/oauth/revoke`, response_types_supported: ["code"], grant_types_supported: ["authorization_code", "refresh_token"], token_endpoint_auth_methods_supported: ["none"], revocation_endpoint_auth_methods_supported: ["none"], code_challenge_methods_supported: ["S256"], scopes_supported: MCP_SCOPES };
+  return { issuer: origin, authorization_response_iss_parameter_supported: true, authorization_endpoint: `${origin}/oauth/authorize`, token_endpoint: `${origin}/oauth/token`, registration_endpoint: `${origin}/oauth/register`, revocation_endpoint: `${origin}/oauth/revoke`, response_types_supported: ["code"], grant_types_supported: ["authorization_code", "refresh_token"], token_endpoint_auth_methods_supported: ["none"], revocation_endpoint_auth_methods_supported: ["none"], code_challenge_methods_supported: ["S256"], scopes_supported: MCP_SCOPES };
 }
 export function protectedResourceMetadata() {
   const { origin, resource } = requireMcpEnabled();

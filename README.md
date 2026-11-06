@@ -202,7 +202,7 @@ Visit your Vercel URL, log in, finish onboarding. Done.
 | `NEXTAUTH_URL` | only if Vercel doesn't auto-detect | Your deployed URL |
 | `MCP_ENABLED` | optional | Explicit `true` enables the remote Claude connector; defaults to off |
 | `MCP_PUBLIC_URL` | when MCP enabled | Canonical HTTPS origin only, e.g. `https://your-app.vercel.app` |
-| `MCP_ALLOWED_REDIRECT_URIS` | optional | Extra exact OAuth callback URLs, comma-separated; Claude's callback is already allowed |
+| `MCP_ALLOWED_REDIRECT_URIS` | optional | Extra exact OAuth callback URLs, comma-separated. Claude’s callback and ChatGPT’s stable callback are built in. |
 | `LLM_ENABLED` | ✅ | `true` to enable AI features |
 | `LLM_PROVIDER` | ✅ | `anthropic` or `openai` |
 | `LLM_API_KEY` | ✅ | Provider API key |

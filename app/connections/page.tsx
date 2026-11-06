@@ -18,7 +18,7 @@ export default async function ConnectionsPage() {
     <h1 className="text-2xl font-bold">Connected assistants</h1>
     <p>Signed in as <strong>{session.username}</strong>. These assistants can use only your NutriTracker account.</p>
     {!enabled && <p>Assistant access is currently disabled. You can still disconnect any existing connections below.</p>}
-    {enabled && !connections.length && <p>No assistants are connected. Start the connection from Claude and sign in with this NutriTracker account.</p>}
+    {enabled && !connections.length && <p>No assistants are connected. Start the connection from your assistant and sign in with this NutriTracker account.</p>}
     {connections.map(connection => <section key={connection.id} className="space-y-3 rounded-2xl bg-surface-card p-5 shadow-card">
       <h2 className="font-bold">{connection.client.name}</h2>
       <ul className="list-disc space-y-1 pl-5 text-sm">{connection.scopes.map(scope => <li key={scope}>{MCP_SCOPE_DESCRIPTIONS[scope as McpScope] ?? scope}</li>)}</ul>

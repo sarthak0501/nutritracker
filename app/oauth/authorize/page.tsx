@@ -18,7 +18,7 @@ export default async function AuthorizePage({ searchParams }: { searchParams: Pr
     await limitOAuthRequest(new Request(`${config.origin}/oauth/authorize`, { headers: await headers() }), "authorize");
     authorization = await validateAuthorizationRequest(params);
   } catch (error) {
-    return <main className="mx-auto max-w-lg px-5 py-16"><h1 className="text-2xl font-bold">Unable to connect</h1><p className="mt-4">{error instanceof OAuthError ? error.message : "Please try connecting again from Claude."}</p></main>;
+    return <main className="mx-auto max-w-lg px-5 py-16"><h1 className="text-2xl font-bold">Unable to connect</h1><p className="mt-4">{error instanceof OAuthError ? error.message : "Please try connecting again from your assistant."}</p></main>;
   }
   const session = await getSession();
   if (!session) redirect(`/login?next=${encodeURIComponent(`/oauth/authorize?${params}`)}`);
