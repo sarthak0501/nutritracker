@@ -217,10 +217,15 @@ and revocation endpoints. It uses OAuth authorization code flow with S256 PKCE,
 per-user consent, single-use five-minute codes, and hashed opaque tokens stored
 in the database. Registration, authorization and token requests are rate limited.
 
-The default allowed callback is exactly
-`https://claude.ai/api/mcp/auth_callback`. Claude uses that callback for its web,
-desktop, and mobile clients. Do not add a phone-specific URL. See
-[Claude's connector authentication documentation](https://claude.com/docs/connectors/building/authentication).
+The two built-in OAuth callbacks are exact URLs:
+
+- Claude uses `https://claude.ai/api/mcp/auth_callback` on web, desktop, and mobile.
+  See [Claude's connector authentication documentation](https://claude.com/docs/connectors/building/authentication).
+- ChatGPT uses `https://chatgpt.com/connector_platform_oauth_redirect`.
+  The authorization server advertises RFC 9207 support and returns its canonical
+  issuer on both approval and denial redirects. A private ChatGPT plugin can use
+  the same HTTPS MCP endpoint with OAuth, a public client and S256 PKCE. See
+  [OpenAI's authentication guide](https://developers.openai.com/plugins/build/auth#protect-callbacks-with-issuer-identification).
 The public host must be reachable by Claude's servers without deployment
 protection or a private-network login in front of the OAuth discovery endpoints.
 The MCP endpoint itself requires the user's OAuth access token.

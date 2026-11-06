@@ -45,8 +45,14 @@ export function optionalConsentScopes(requested: readonly string[]): McpScope[] 
   return MCP_OPTIONAL_CAPABILITIES.flatMap(group => group.scopes).filter(scope => !requested.includes(scope));
 }
 
+// The callback identifies the host. Never use a client-supplied display name.
+export const ASSISTANT_CALLBACKS: Readonly<Record<string, string>> = {
+  "https://claude.ai/api/mcp/auth_callback": "Claude",
+  "https://chatgpt.com/connector_platform_oauth_redirect": "ChatGPT",
+};
+
 export function allowedRedirectUris(): string[] {
-  const redirects = ["https://claude.ai/api/mcp/auth_callback", ...(process.env.MCP_ALLOWED_REDIRECT_URIS ?? "").split(",").map(value => value.trim()).filter(Boolean)];
+  const redirects = [...Object.keys(ASSISTANT_CALLBACKS), ...(process.env.MCP_ALLOWED_REDIRECT_URIS ?? "").split(",").map(value => value.trim()).filter(Boolean)];
   for (const value of redirects) {
     const url = new URL(value);
     const local = process.env.NODE_ENV !== "production" && ["localhost", "127.0.0.1", "[::1]"].includes(url.hostname);
