@@ -3,6 +3,9 @@ import { MealType, Prisma, type PrismaClient } from "@prisma/client";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { McpMutationError, withMcpMutation } from "@/lib/mcp-mutations";
+import { buddyMealLoggingEnabled } from "@/lib/buddy-meal-feature";
+import { allocatePlates, checkMealBuddy, plateSchema, recipeSourceSchema, resolveReviewedSource, reviewedRecipe } from "@/lib/mcp-delegated-meals";
+import { entriesOccurrence, findMealOccurrence, savedOccurrence } from "@/lib/meal-occurrence";
 import { itemForSharing, parseStoredItems, publicMealItem, resolveSource, selectMealItems } from "@/lib/meal-library";
 import { insertMealSnapshots, mealDateSchema, snapshotMealEntry, withMealBatchInTransaction } from "@/lib/meal-writes";
 
@@ -40,6 +43,13 @@ export const GetBuddyMealsSchema = z.object({
   limit: z.number().int().min(1).max(50).default(20),
 }).strict();
 export const ShareMealSchema = LogExistingMealSchema.extend({
+  source: z.union([recipeSourceSchema,
+    z.object({ kind: z.literal("saved"), id, expectedUpdatedAt: version.optional(), occurrenceId: requestId.optional() }).strict(),
+    z.object({ kind: z.literal("entries"), entries: z.array(z.object({ id, expectedUpdatedAt: version }).strict()).min(1).max(100) }).strict(),
+    source.options[1],
+  ]),
+  occurrenceId: requestId.optional().describe("For a saved meal, reuse this occurrence ID when switching between direct logging and sharing. Defaults to requestId."),
+  buddyPortion: plateSchema.optional().describe("Required for a prepared recipe. Use the recipe yield unit. May also allocate individual items in a saved meal or logged plate."),
   recipientId: id, name: name.optional(),
   confirmed: z.literal(true).describe("True only after the person explicitly asks to share these selected meal details with this identified buddy."),
 }).strict();
@@ -62,15 +72,6 @@ async function mealSource(tx: Prisma.TransactionClient, userId: string, input: z
     throw error;
   }
 }
-async function acceptedBuddy(tx: Prisma.TransactionClient, userId: string, otherId: string) {
-  // Keep authorization valid until the proposal/acceptance commits, including
-  // when the website concurrently removes or changes the buddy relationship.
-  const buddies = await tx.$queryRaw<Array<{ id: string }>>`SELECT "id" FROM "BuddyRelationship"
-    WHERE "status" = 'ACCEPTED' AND (("requesterId" = ${userId} AND "addresseeId" = ${otherId})
-    OR ("requesterId" = ${otherId} AND "addresseeId" = ${userId})) LIMIT 1 FOR SHARE`;
-  if (!buddies.length || userId === otherId) throw new McpMutationError("This person is not a connected buddy. Check your buddy list before sharing or accepting meals.");
-}
-
 export async function getMcpSavedMeals(userId: string, input: z.input<typeof GetSavedMealsSchema> = {}, client: PrismaClient = prisma) {
   const parsed = GetSavedMealsSchema.parse(input);
   const rows = await client.savedMeal.findMany({ where: { userId }, orderBy: [{ name: "asc" }, { id: "asc" }], skip: parsed.offset, take: parsed.limit + 1 });
@@ -157,19 +158,21 @@ export async function correctMcpMealEntries(userId: string, input: z.input<typeo
 
 export async function getMcpBuddyMeals(userId: string, input: z.input<typeof GetBuddyMealsSchema> = {}, client: PrismaClient = prisma) {
   const parsed = GetBuddyMealsSchema.parse(input);
-  const relationships = await client.buddyRelationship.findMany({
-    where: { status: "ACCEPTED", OR: [{ requesterId: userId }, { addresseeId: userId }] },
-    select: { requesterId: true, requester: { select: { id: true, username: true } }, addressee: { select: { id: true, username: true } } },
-    orderBy: { id: "asc" }, take: 101,
-  });
-  const buddies = relationships.slice(0, 100).map(row => row.requesterId === userId ? row.addressee : row.requester);
+  const rows = await client.$queryRaw<Array<{ id: string; username: string; granted: boolean }>>`
+    SELECT u.id, u.username, bool_and(CASE WHEN r."requesterId" = u.id THEN r."requesterAllowsMealLogging"
+      ELSE r."addresseeAllowsMealLogging" END) AS granted
+    FROM "BuddyRelationship" r JOIN "User" u ON u.id = CASE WHEN r."requesterId" = ${userId}
+      THEN r."addresseeId" ELSE r."requesterId" END
+    WHERE r.status = 'ACCEPTED' AND (r."requesterId" = ${userId} OR r."addresseeId" = ${userId})
+      AND u.id <> ${userId} GROUP BY u.id, u.username ORDER BY u.id LIMIT 101`;
+  const buddies = rows.slice(0, 100).map(({ id, username, granted }) => ({ id, username, mayLogMealsForBuddy: granted && buddyMealLoggingEnabled() }));
   const allowedIds = buddies.map(buddy => buddy.id);
   const pending = await client.mealProposal.findMany({
     where: { recipientId: userId, status: "PENDING", senderId: { in: allowedIds } },
     orderBy: [{ createdAt: "asc" }, { id: "asc" }], skip: parsed.offset, take: parsed.limit + 1,
     select: { id: true, name: true, date: true, mealType: true, items: true, senderId: true },
   });
-  return { buddies, buddiesTruncated: relationships.length > 100,
+  return { buddies, buddiesTruncated: rows.length > 100,
     incoming: pending.slice(0, parsed.limit).map(row => ({ id: row.id, name: row.name, suggestedDate: row.date, suggestedMealType: row.mealType,
       sender: buddies.find(buddy => buddy.id === row.senderId), items: parseStoredItems(row.items).map(publicMealItem) })),
     hasMore: pending.length > parsed.limit, nextOffset: pending.length > parsed.limit ? parsed.offset + parsed.limit : null };
@@ -178,13 +181,34 @@ export async function getMcpBuddyMeals(userId: string, input: z.input<typeof Get
 export async function shareMcpMeal(userId: string, input: z.input<typeof ShareMealSchema>, client: PrismaClient = prisma) {
   const parsed = ShareMealSchema.parse(input);
   return withMcpMutation(userId, parsed.requestId, "share_meal", parsed, async tx => {
-    await acceptedBuddy(tx, userId, parsed.recipientId);
-    const items = selectMealItems(await mealSource(tx, userId, parsed.source), parsed).map(itemForSharing);
-    const proposal = await tx.mealProposal.create({ data: { senderId: userId, recipientId: parsed.recipientId,
-      senderRequestId: requestKey(userId, parsed.requestId, "share"), name: parsed.name ?? "Shared meal", date: parsed.date,
-      mealType: parsed.mealType, items: json(items) } });
-    return { proposalId: proposal.id, recipientId: parsed.recipientId, status: "PENDING", savedToRecipientLog: false };
-  }, client);
+    const { source, recipientId, date, mealType } = parsed;
+    if (parsed.buddyPortion && (parsed.selectedItemIds || parsed.multiplier !== 1))
+      throw new McpMutationError("Choose either buddyPortion or the legacy item selection and multiplier.");
+    if (source.kind === "recipe" && !parsed.buddyPortion)
+      throw new McpMutationError("Specify the buddy's portion using the cooked recipe's yield unit.");
+    if (source.kind === "saved" && source.occurrenceId && parsed.occurrenceId && source.occurrenceId !== parsed.occurrenceId)
+      throw new McpMutationError("Use one occurrence ID for this saved meal.");
+    const savedKey = source.kind === "saved" ? source.occurrenceId ?? parsed.occurrenceId ?? parsed.requestId : "";
+    const pinned = source.kind === "recipe" || (source.kind === "entries" && "entries" in source) ? source
+      : source.kind === "saved" && source.expectedUpdatedAt ? { ...source, expectedUpdatedAt: source.expectedUpdatedAt, occurrenceId: savedKey } : undefined;
+    const reviewed = pinned ? await resolveReviewedSource(tx, userId, { source: pinned, date, mealType }, false) : undefined;
+    const legacySource = source.kind === "saved" || (source.kind === "entries" && "entryIds" in source) ? source : undefined;
+    const originals = reviewed?.items ?? await mealSource(tx, userId, legacySource!);
+    const portions = parsed.buddyPortion;
+    const select = (items: typeof originals) => portions ? allocatePlates(items, reviewed?.yield ?? null, portions).buddy
+      : selectMealItems(items, parsed).map(itemForSharing);
+    const occurrenceKey = reviewed?.occurrence ?? (legacySource?.kind === "entries"
+      ? entriesOccurrence(legacySource.entryIds, date, mealType) : savedOccurrence(savedKey));
+    const items = select(originals);
+    const prior = await findMealOccurrence(tx, userId, recipientId, occurrenceKey, date, mealType, items.map(item => item.id));
+    if (prior) return { proposalId: prior.id, recipientId, status: prior.status, savedToRecipientLog: prior.status === "DIRECT" || prior.status === "ACCEPTED" };
+    const sharedItems = source.kind === "recipe"
+      ? select((await reviewedRecipe(tx, userId, source.preparedRecipeToken, date, mealType, true)).items) : items;
+    const proposal = await tx.mealProposal.create({ data: { senderId: userId, recipientId, occurrenceKey,
+      senderRequestId: requestKey(userId, parsed.requestId, "share"), name: parsed.name ?? "Shared meal", date,
+      mealType, items: json(sharedItems) } });
+    return { proposalId: proposal.id, recipientId, status: "PENDING", savedToRecipientLog: false };
+  }, client, { otherAccounts: [parsed.recipientId], authorize: async tx => { await checkMealBuddy(tx, userId, parsed.recipientId, false); } });
 }
 
 export async function respondMcpSharedMeal(userId: string, input: z.input<typeof RespondSharedMealSchema>, client: PrismaClient = prisma) {
@@ -192,7 +216,7 @@ export async function respondMcpSharedMeal(userId: string, input: z.input<typeof
   return withMcpMutation(userId, parsed.requestId, "respond_shared_meal", parsed, async tx => {
     const proposal = await tx.mealProposal.findFirst({ where: { id: parsed.proposalId, recipientId: userId } });
     if (!proposal) throw new McpMutationError("This incoming meal is not available to your account.");
-    await acceptedBuddy(tx, userId, proposal.senderId);
+    await checkMealBuddy(tx, userId, proposal.senderId, false);
     if (proposal.status !== "PENDING") throw new McpMutationError("This meal has already been answered. Refresh your incoming meals and daily log.");
     const status = parsed.action === "accept" ? "ACCEPTED" : "DECLINED";
     const claimed = await tx.mealProposal.updateMany({ where: { id: proposal.id, recipientId: userId, status: "PENDING" }, data: { status, respondedAt: new Date() } });

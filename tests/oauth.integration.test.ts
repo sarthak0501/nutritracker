@@ -163,6 +163,8 @@ test("cached nutrition scopes gain only explicitly selected signed optional perm
   const old = await exchangeOAuthToken((await grant()).tokenParams);
   const auth = await authorization();
   const offered = optionalConsentScopes(auth.request.scopes);
+  assert.ok(offered.includes("buddy-meals:write"));
+  assert.deepEqual(selectedConsentScopes(new URLSearchParams({ allow_buddy_logging: "yes" }), offered), ["buddy-meals:write"]);
   assert.ok(offered.includes("workouts:write"));
   assert.ok(offered.includes("wellness:read"));
   const consent = await signConsent(firstUser, auth.request, offered);

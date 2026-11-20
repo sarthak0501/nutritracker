@@ -254,6 +254,7 @@ export default async function TodayPage() {
                         unit={e.unit}
                         mealType={e.mealType}
                         macroLine={macroLine}
+                        loggedByUsername={e.batch?.loggedByUsername}
                         isLegacyPortion={isLegacyPortion(e, e.food)}
                         portionLabel={entryAmountLabel(e, e.food)}
                       >

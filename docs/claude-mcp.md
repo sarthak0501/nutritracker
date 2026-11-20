@@ -1,7 +1,7 @@
 # NutriTracker in Claude
 
 Use the existing NutriTracker account from Claude to track meals, workouts,
-water and body weight, review progress, and exchange meal proposals with accepted
+water and body weight, review progress, and log shared meals with individual portions or exchange meal proposals with accepted
 buddies. The connector runs on the hosted NutriTracker
 server, so a laptop does not need to stay on. Each person authorizes their own
 login and receives the access granted to that account, including accepted-buddy
@@ -45,7 +45,7 @@ public MCP URL for both people; do not create a shared login.
 4. Check the username and requested permissions shown on the permission page.
    If optional feature boxes appear, select the capabilities you want: **Workouts**,
    **Water and body weight**, **Saved meals and corrections**, and **Buddy logs
-   and meal sharing**. Each box explains the additional read/write access. Choose **Allow
+   and meal sharing**, and **Log meals for a buddy**. Each box explains the additional read/write access. Choose **Allow
    connection** after reviewing your selection. If it shows the other person's
    account, choose **Use a different NutriTracker account** and sign in with
    your own account.
@@ -65,9 +65,8 @@ login; everyday use takes place in Claude.
 After the tracking release is deployed and verified, each person should reconnect
 NutriTracker from their own Claude account, sign in with their own NutriTracker
 login, and approve the additional capabilities. Keep the same connector URL.
-The permission page offers the four unchecked feature boxes above even when
-Claude sends its cached nutrition-only scope request. Select all four to enable
-all additions. If Claude requests expanded permissions directly, the page lists
+The permission page offers unchecked feature boxes even when
+Claude sends its cached nutrition-only scope request. For buddy logging, select **Buddy logs and meal sharing** and **Log meals for a buddy**. Select **Saved meals and corrections** to reuse presets. If Claude requests expanded permissions directly, the page lists
 them under **Allow this assistant to** instead of duplicating optional boxes.
 
 Existing connections keep their granted permissions. Deployment, token refresh,
@@ -139,9 +138,17 @@ Sharing sends only selected meal details to an accepted buddy. The recipient
 chooses their own portions, date and meal type before accepting; sending alone
 never adds entries to their log.
 
+### Log dinner for two in Claude or ChatGPT
+
+Each diary owner can open **Buddy** in NutriTracker and enable or revoke “Let [name] add meals to my log.” The two directions are independent. Reconnect the assistant you use to approve **Log meals for a buddy** and **Buddy logs and meal sharing**. The hosted ChatGPT plugin and the Claude connector use the same server.
+
+- “The pot of dal made four equal servings. It has 1,200 calories, 60 g protein, 150 g carbs and 40 g fat in total. I ate one serving and my buddy ate one and a half. Log dinner for both of us.”
+- “I already logged my lunch. My buddy ate half as much. Log only their portion.”
+- “Show the portions before saving.” A preview leaves both diaries untouched. An accepted direct save gives each eater their own entries. Each owner can correct their entry or undo their own recent batch. “Send my buddy this meal for review” still creates a proposal.
+
 ## Tools and access
 
-The server exposes 23 tools. Requested permissions are checked on every call.
+The server exposes 25 tools. Requested permissions are checked on every call.
 
 | Tool | What it does | Scope |
 |---|---|---|
@@ -167,6 +174,8 @@ The server exposes 23 tools. Requested permissions are checked on every call.
 | `nutritracker_get_buddy_meals` | Lists accepted buddies and pending incoming meal proposals | `sharing:read` |
 | `nutritracker_get_buddy_day` | Reads an accepted buddy's daily food and workout logs under the existing buddy relationship | `sharing:read` |
 | `nutritracker_share_meal` | Sends selected meal details to an explicitly chosen accepted buddy | `sharing:read` + `sharing:write` + `nutrition:read` |
+| `nutritracker_preview_buddy_meal` | Reviews the individual portions and returns the review token | `sharing:read` + `nutrition:read`, plus `meals:read` for a preset |
+| `nutritracker_log_buddy_meal` | Adds the reviewed portions to one or both diaries when the recipient permits it | Preview scopes + `buddy-meals:write`, plus `nutrition:write` for a personal plate |
 | `nutritracker_respond_shared_meal` | Accepts or declines an incoming proposal; acceptance logs chosen portions | `sharing:read` + `sharing:write` + `nutrition:read` + `nutrition:write` |
 
 The authenticated connection determines the user. Tools do not accept a user ID
@@ -260,7 +269,7 @@ first, then this upgrade.
    Review and run it once against the same database. Retain the private report.
    The generator itself never reads credentials or connects to a database.
 5. Deploy the matching application. Existing connections retain their original
-   scopes. Verify the new 23-tool surface, old-grant permission restrictions,
+   scopes. Verify the tracking tools, old-grant permission restrictions,
    native mobile-sized consent submission, and synthetic-account write/retry
    and isolation behavior. Clean up only those exact synthetic records.
 6. Only after live verification, tell each person to reconnect and select the
@@ -405,3 +414,7 @@ an unexpected schema state.
 | New tools ask for additional permissions | Reconnect, review the permission page, and select the optional capability boxes you want. Existing grants never gain scopes through refresh. |
 | Claude cannot see a newly deployed tool | Start a fresh conversation after reconnecting and check that the connector is enabled. |
 | Correction says the record changed | Read the current record and confirm the intended change, then use a new request ID. Do not overwrite using the old version. |
+
+### Buddy logging rollout
+
+Back up the database, rehearse `node scripts/rollout-buddy-meals.mjs`, then apply the generated `--commit` SQL before releasing the server. Existing relationships start with both directions off. Set `MCP_BUDDY_MEAL_LOGGING_ENABLED=false` and redeploy to pause direct writes. The database additions are compatible with the previous release.

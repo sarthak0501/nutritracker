@@ -5,6 +5,8 @@ import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { estimateNutritionFromText, parseNutritionEstimate, type EstimateResponse } from "@/lib/llm";
 import { insertEstimatedItems } from "@/lib/estimated-meals";
+import { RecipeInputSchema, prepareRecipe } from "@/lib/mcp-recipe";
+import { SelfRecipePlateSchema, logSelfRecipePlate } from "@/lib/recipe-self-plate";
 import { mealDateSchema, undoMealBatch, withMealBatch } from "@/lib/meal-writes";
 import { safeNutrientsForEntry, type Nutrients } from "@/lib/nutrition";
 
@@ -33,16 +35,20 @@ export const ProgressSchema = z.object({
   days: z.number().int().min(1).max(31).default(7),
   timezone: timezoneInput,
 }).strict();
-export const PrepareMcpMealSchema = z.object({
+const PersonalMealSchema = z.object({
   description: z.string().trim().min(1).max(2000).describe("The person's meal description, including portions and any corrections."),
   date: mealDateSchema.optional(),
   mealType: z.nativeEnum(MealType),
   mealName: z.string().trim().min(1).max(200).optional(),
   timezone: timezoneInput,
 }).strict();
+export const PrepareMcpMealSchema = PersonalMealSchema.extend({
+  recipe: RecipeInputSchema.optional().describe("For one shared cooked dish, supply the whole yield and nutrition basis plus a short food-only mealName. For sides eaten in different proportions, prepare each dish separately or select items from a saved or logged plate. Omit for a personal plate."),
+});
 export const CommitMcpMealSchema = z.object({
-  preparedMealToken: z.string().min(1).max(MAX_PREPARED_TOKEN_LENGTH).describe("Exact opaque token returned by prepare_meal. Reuse the same token when retrying the same save."),
-}).strict();
+  preparedMealToken: z.string().min(1).max(MAX_PREPARED_TOKEN_LENGTH).optional().describe("Exact personal-meal token returned by prepare_meal. Reuse it for retries."),
+  selfRecipe: SelfRecipePlateSchema.optional().describe("Use instead of preparedMealToken when the person chooses to log only their own portion of a prepared whole recipe."),
+}).strict().refine(input => Boolean(input.preparedMealToken) !== Boolean(input.selfRecipe), "Provide either a personal meal token or a self-only recipe plate.");
 export const UndoMcpMealSchema = z.object({ batchId: z.string().min(1).max(128) }).strict();
 
 type EntryWithFood = LogEntry & { food: Food };
@@ -122,7 +128,7 @@ export async function getMcpDayProgress(userId: string, input: z.input<typeof Da
   const date = parsed.date ?? mcpCalendarDate(timezone);
   const [account, entries, water, workouts] = await Promise.all([
     accountData(userId, client),
-    client.logEntry.findMany({ where: { userId, date }, include: { food: true }, orderBy: [{ createdAt: "asc" }, { id: "asc" }], take: MAX_QUERY_ENTRIES + 1 }),
+    client.logEntry.findMany({ where: { userId, date }, include: { food: true, batch: { select: { loggedByUsername: true } } }, orderBy: [{ createdAt: "asc" }, { id: "asc" }], take: MAX_QUERY_ENTRIES + 1 }),
     client.waterEntry.findUnique({ where: { userId_date: { userId, date } }, select: { glasses: true } }),
     client.workoutEntry.aggregate({ where: { userId, date }, _sum: { caloriesBurned: true }, _count: { _all: true, caloriesBurned: true } }),
   ]);
@@ -136,7 +142,7 @@ export async function getMcpDayProgress(userId: string, input: z.input<typeof Da
     workouts: { count: workouts._count._all, estimatedCaloriesBurned: workouts._sum.caloriesBurned, entriesMissingCalories: workouts._count._all - workouts._count.caloriesBurned },
     entries: entries.slice(0, 100).map((entry) => ({
       id: entry.id, updatedAt: entry.updatedAt.toISOString(), date: entry.date, batchId: entry.batchId, mealType: entry.mealType, mealName: entry.mealName,
-      food: entry.food.name, amount: entry.amount, unit: entry.unit, isEstimated: entry.isEstimated,
+      loggedByUsername: entry.batch?.loggedByUsername ?? null, food: entry.food.name, amount: entry.amount, unit: entry.unit, isEstimated: entry.isEstimated,
       nutrients: safeNutrientsForEntry(entry, entry.food),
     })),
     entriesTruncated: entries.length > 100,
@@ -181,7 +187,7 @@ function boundedEstimate(value: unknown): EstimateResponse {
   return estimate;
 }
 
-const preparedPayloadSchema = PrepareMcpMealSchema.extend({ date: mealDateSchema, timezone: timezoneSchema, estimate: z.unknown() }).strict();
+const preparedPayloadSchema = PersonalMealSchema.extend({ date: mealDateSchema, timezone: timezoneSchema, estimate: z.unknown() }).strict();
 const signedMealSchema = z.object({
   iss: z.literal(tokenIssuer), aud: z.literal("nutritracker:mcp:commit-meal"),
   sub: z.string().min(1), jti: z.string().uuid(), iat: z.number().int().positive(),
@@ -189,29 +195,45 @@ const signedMealSchema = z.object({
 }).strict();
 type PrepareOptions = { client?: PrismaClient; estimate?: typeof estimateNutritionFromText; now?: Date };
 
-export async function prepareMcpMeal(userId: string, input: z.input<typeof PrepareMcpMealSchema>, options: PrepareOptions = {}) {
-  const parsed = PrepareMcpMealSchema.parse(input);
-  const key = preparedMealKey();
+type MealInput = z.input<typeof PrepareMcpMealSchema>;
+type RecipePreview = Awaited<ReturnType<typeof prepareRecipe>> & { username: string; timezone: string };
+type PersonalPreview = Awaited<ReturnType<typeof preparePersonalMeal>>;
+export function prepareMcpMeal(userId: string, input: MealInput & { recipe: z.input<typeof RecipeInputSchema> }, options?: PrepareOptions): Promise<RecipePreview>;
+export function prepareMcpMeal(userId: string, input: MealInput & { recipe?: undefined }, options?: PrepareOptions): Promise<PersonalPreview>;
+export function prepareMcpMeal(userId: string, input: MealInput, options?: PrepareOptions): Promise<PersonalPreview | RecipePreview>;
+export async function prepareMcpMeal(userId: string, input: MealInput, options: PrepareOptions = {}) {
+  const { recipe, ...parsed } = PrepareMcpMealSchema.parse(input);
   const account = await accountData(userId, options.client ?? prisma);
   const now = options.now ?? new Date();
   const timezone = parsed.timezone ?? MCP_DEFAULT_TIMEZONE;
   const date = parsed.date ?? mcpCalendarDate(timezone, now);
-  let estimate: EstimateResponse;
-  try {
-    estimate = boundedEstimate(await (options.estimate ?? estimateNutritionFromText)({ text: parsed.description }));
-  } catch (error) {
-    if (error instanceof McpNutritionError) throw error;
-    throw new McpNutritionError("NutriTracker could not estimate this meal. Nothing was saved. Please try again with a clear description and portions.");
+  async function estimateText(text: string) {
+    try {
+      return boundedEstimate(await (options.estimate ?? estimateNutritionFromText)({ text }));
+    } catch (error) {
+      if (error instanceof McpNutritionError) throw error;
+      throw new McpNutritionError("NutriTracker could not estimate this meal. Nothing was saved. Please try again with a clear description and portions.");
+    }
   }
+  if (recipe) {
+    const preview = await prepareRecipe(userId, recipe, { ...parsed, date, now },
+      () => estimateText(`Estimate the full recipe, using all stated ingredient quantities for the entire cooked batch. ${parsed.description}`));
+    return { ...preview, username: account.username, timezone };
+  }
+  return preparePersonalMeal(userId, account.username, parsed, date, timezone, now, await estimateText(parsed.description));
+}
+
+async function preparePersonalMeal(userId: string, username: string, parsed: z.output<typeof PersonalMealSchema>, date: string,
+  timezone: string, now: Date, estimate: EstimateResponse) {
   const payload = { ...parsed, date, timezone, estimate };
   const preparedMealToken = await new SignJWT({ meal: payload })
     .setProtectedHeader({ alg: "HS256", typ: "nt-prepared-meal+jwt" })
     .setIssuer(tokenIssuer).setAudience("nutritracker:mcp:commit-meal").setSubject(userId)
     .setJti(randomUUID()).setIssuedAt(Math.floor(now.getTime() / 1000))
-    .setExpirationTime(Math.floor(now.getTime() / 1000) + PREPARED_MEAL_SECONDS).sign(key);
+    .setExpirationTime(Math.floor(now.getTime() / 1000) + PREPARED_MEAL_SECONDS).sign(preparedMealKey());
   if (preparedMealToken.length > MAX_PREPARED_TOKEN_LENGTH) throw new McpNutritionError("This estimate is too large. Describe a smaller meal and try again.");
   return {
-    username: account.username, date, timezone, mealType: parsed.mealType, mealName: parsed.mealName ?? null,
+    username, date, timezone, mealType: parsed.mealType, mealName: parsed.mealName ?? null,
     estimate, estimatedTotals: totalsFor(estimate.items.map((item) => item.nutrients)),
     preparedMealToken, expiresAt: new Date(now.getTime() + PREPARED_MEAL_SECONDS * 1000).toISOString(),
     saved: false,
@@ -220,7 +242,12 @@ export async function prepareMcpMeal(userId: string, input: z.input<typeof Prepa
 }
 
 export async function commitMcpMeal(userId: string, input: z.input<typeof CommitMcpMealSchema>, client: PrismaClient = prisma) {
-  const { preparedMealToken } = CommitMcpMealSchema.parse(input);
+  const { preparedMealToken, selfRecipe } = CommitMcpMealSchema.parse(input);
+  if (selfRecipe) {
+    const receipt = await logSelfRecipePlate(userId, selfRecipe, client);
+    return { ...receipt, dayProgress: await getMcpDayProgress(userId, { date: receipt.date }, client) };
+  }
+  if (!preparedMealToken) throw new McpNutritionError("Provide the prepared meal token.");
   const nowSeconds = Math.floor(Date.now() / 1000);
   let signed: z.infer<typeof signedMealSchema>;
   try {
@@ -262,7 +289,7 @@ export async function commitMcpMeal(userId: string, input: z.input<typeof Commit
 export async function undoMcpMeal(userId: string, input: z.input<typeof UndoMcpMealSchema>, client: PrismaClient = prisma) {
   const { batchId } = UndoMcpMealSchema.parse(input);
   const batch = await client.logBatch.findFirst({ where: { id: batchId, userId }, select: { kind: true } });
-  if (!batch || !batch.kind.startsWith("mcp-meal:")) throw new McpNutritionError("This Claude meal save was not found in your account. Use the website to remove other entries.");
+  if (!batch || !(batch.kind.startsWith("mcp-meal:") || batch.kind.startsWith("mcp-buddy:"))) throw new McpNutritionError("This assistant meal save was not found in your account. Use the website to remove other entries.");
   const date = mealDateSchema.parse(batch.kind.split(":")[1]);
   let receipt;
   try {

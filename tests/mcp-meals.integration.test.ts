@@ -147,7 +147,7 @@ test("accept and decline race to one result; declined proposals never log meals"
   assert.equal(outcomes.filter(outcome => outcome.status === "fulfilled").length, 1);
   const row = await prisma.mealProposal.findUniqueOrThrow({ where: { id: sent.proposalId } });
   assert.equal(await prisma.logEntry.count({ where: { userId: b.id } }), row.status === "ACCEPTED" ? 1 : 0);
-  const declined = await shareMcpMeal(a.id, { requestId: key(), source, date, mealType: "LUNCH", recipientId: b.id, confirmed: true });
+  const declined = await shareMcpMeal(a.id, { requestId: key(), source, date: "2026-11-05", mealType: "LUNCH", recipientId: b.id, confirmed: true });
   const before = await prisma.logEntry.count({ where: { userId: b.id } });
   await respondMcpSharedMeal(b.id, { requestId: key(), proposalId: declined.proposalId, action: "decline" });
   assert.equal(await prisma.logEntry.count({ where: { userId: b.id } }), before);

@@ -20,6 +20,7 @@ type Props = {
   unit: string;
   mealType: string;
   macroLine: string;
+  loggedByUsername?: string | null;
   isLegacyPortion?: boolean;
   portionLabel?: string;
   children?: ReactNode; // reactions slot
@@ -34,6 +35,7 @@ export function LogEntryCard({
   unit,
   mealType,
   macroLine,
+  loggedByUsername,
   isLegacyPortion = false,
   portionLabel,
   children,
@@ -133,6 +135,7 @@ export function LogEntryCard({
             {brand && <span className="font-normal text-gray-400"> ({brand})</span>}
           </div>
           <div className="mt-0.5 text-xs text-gray-500 tabular-nums">{macroLine}</div>
+          {loggedByUsername && <div className="mt-0.5 text-xs text-gray-600">Logged by {loggedByUsername}</div>}
         </div>
 
         <div className="flex items-center gap-1 flex-shrink-0">

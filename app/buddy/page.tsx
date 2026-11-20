@@ -2,7 +2,8 @@ import { requireSession } from "@/lib/session";
 import { prisma } from "@/lib/db";
 import { Card } from "@/components/Card";
 import { WeeklyChallenge } from "@/components/WeeklyChallenge";
-import { sendBuddyRequest, respondToBuddyRequest, removeBuddy } from "@/app/actions/buddy";
+import { sendBuddyRequest, respondToBuddyRequest, removeBuddy, setBuddyMealLogging } from "@/app/actions/buddy";
+import { allowsMealLoggingInto } from "@/lib/buddy-grants";
 import { getChallengeData } from "@/lib/challenge";
 import { todayIsoDate } from "@/lib/dates";
 import { getMealLibrary } from "@/lib/meal-library";
@@ -37,14 +38,21 @@ export default async function BuddyPage() {
     getMealLibrary(user.id, today),
   ]);
 
-  const accepted = [
+  const acceptedRows = [
     ...sent
       .filter((r) => r.status === "ACCEPTED")
-      .map((r) => ({ id: r.id, username: r.addressee.username, userId: r.addressee.id })),
+      .map((r) => ({ id: r.id, username: r.addressee.username, userId: r.addressee.id, allowed: allowsMealLoggingInto(r, user.id) })),
     ...received
       .filter((r) => r.status === "ACCEPTED")
-      .map((r) => ({ id: r.id, username: r.requester.username, userId: r.requester.id })),
+      .map((r) => ({ id: r.id, username: r.requester.username, userId: r.requester.id, allowed: allowsMealLoggingInto(r, user.id) })),
   ];
+  const byBuddy = new Map<string, typeof acceptedRows[number]>();
+  for (const row of acceptedRows) {
+    const existing = byBuddy.get(row.userId);
+    if (existing) existing.allowed &&= row.allowed;
+    else byBuddy.set(row.userId, row);
+  }
+  const accepted = [...byBuddy.values()];
 
   const pendingIncoming = received.filter((r) => r.status === "PENDING");
   const pendingSent = sent.filter((r) => r.status === "PENDING");
@@ -92,18 +100,34 @@ export default async function BuddyPage() {
         ) : (
           <ul className="space-y-2">
             {accepted.map((b) => (
-              <li key={b.id} className="flex items-center justify-between rounded-xl bg-white/70 px-4 py-3">
-                <div className="flex items-center gap-3">
-                  <AvatarBadge name={b.username} size="sm" />
-                  <div>
-                    <span className="font-semibold text-gray-800">{b.username}</span>
-                    <div className="text-[10px] text-gray-400">Active buddy</div>
+              <li key={b.id} className="rounded-xl bg-white/70 px-4 py-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <AvatarBadge name={b.username} size="sm" />
+                    <div>
+                      <span className="font-semibold text-gray-800">{b.username}</span>
+                      <div className="text-[10px] text-gray-400">Active buddy</div>
+                    </div>
                   </div>
+                  <form action={removeBuddy}>
+                    <input type="hidden" name="id" value={b.id} />
+                    <input type="hidden" name="expectedUserId" value={user.id} />
+                    <button className="text-xs text-gray-400 hover:text-red-500 transition-colors">
+                      Remove
+                    </button>
+                  </form>
                 </div>
-                <form action={removeBuddy}>
+                <form action={setBuddyMealLogging} className="mt-3 flex items-center justify-between gap-3 border-t border-purple-100 pt-3">
                   <input type="hidden" name="id" value={b.id} />
-                  <button className="text-xs text-gray-400 hover:text-red-500 transition-colors">
-                    Remove
+                  <input type="hidden" name="expectedUserId" value={user.id} />
+                  <input type="hidden" name="allow" value={String(!b.allowed)} />
+                  <label id={`grant-${b.id}`} htmlFor={`switch-${b.id}`} className="text-sm text-gray-700">
+                    Let {b.username} add meals to my log
+                  </label>
+                  <button id={`switch-${b.id}`} type="submit" role="switch" aria-checked={b.allowed}
+                    aria-labelledby={`grant-${b.id}`}
+                    className={`min-w-14 rounded-lg px-3 py-2 text-xs font-semibold ${b.allowed ? "bg-brand-600 text-white" : "bg-gray-100 text-gray-700"}`}>
+                    {b.allowed ? "On" : "Off"}
                   </button>
                 </form>
               </li>

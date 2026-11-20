@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import { after, before, test } from "node:test";
 import type { PrismaClient } from "@prisma/client";
 import { prisma } from "../lib/db";
+import { allowsMealLoggingInto, removeOwnedBuddyRelationship, setOwnerMealLoggingGrant } from "../lib/buddy-grants";
 import { BuddyDaySchema, getMcpBuddyDay } from "../lib/mcp-buddy";
 
 const database = new URL(process.env.DATABASE_URL || "file:///missing-fixture");
@@ -84,6 +85,34 @@ test("multiple buddies require explicit selection, while duplicate reciprocal li
   await assert.rejects(getMcpBuddyDay(a.id, { date }), /More than one buddy/);
   assert.equal((await getMcpBuddyDay(a.id, { buddyId: b.id, date })).buddy.id, b.id);
   assert.equal((await getMcpBuddyDay(a.id, { buddyId: c.id, date })).buddy.id, c.id);
+});
+
+test("a grant belongs to the diary owner and removal clears both directions including legacy reciprocal links", async () => {
+  const { a, b, c } = await fixture();
+  const first = await prisma.buddyRelationship.create({ data: { requesterId: a.id, addresseeId: b.id } });
+  assert.equal(await setOwnerMealLoggingGrant(a.id, first.id, true), false);
+  await prisma.buddyRelationship.update({ where: { id: first.id }, data: { status: "ACCEPTED" } });
+  const reverse = await prisma.buddyRelationship.create({ data: { requesterId: b.id, addresseeId: a.id, status: "ACCEPTED" } });
+  const pair = { id: { in: [first.id, reverse.id] } };
+  assert.equal(await setOwnerMealLoggingGrant(c.id, first.id, true), false);
+  assert.equal(await removeOwnedBuddyRelationship(c.id, first.id), false);
+  assert.equal(await setOwnerMealLoggingGrant(a.id, reverse.id, true), true);
+  for (const row of await prisma.buddyRelationship.findMany({ where: pair })) {
+    assert.equal(allowsMealLoggingInto(row, a.id), true);
+    assert.equal(allowsMealLoggingInto(row, b.id), false);
+  }
+  await setOwnerMealLoggingGrant(b.id, first.id, true);
+  await setOwnerMealLoggingGrant(a.id, first.id, false);
+  for (const row of await prisma.buddyRelationship.findMany({ where: pair })) {
+    assert.equal(allowsMealLoggingInto(row, a.id), false);
+    assert.equal(allowsMealLoggingInto(row, b.id), true);
+  }
+  assert.equal(await removeOwnedBuddyRelationship(b.id, reverse.id), true);
+  assert.equal(await prisma.buddyRelationship.count({ where: pair }), 0);
+  const renewed = await prisma.buddyRelationship.create({ data: { requesterId: b.id, addresseeId: a.id, status: "ACCEPTED" } });
+  assert.equal(await setOwnerMealLoggingGrant(a.id, first.id, true), false);
+  assert.equal(allowsMealLoggingInto(renewed, a.id), false);
+  assert.equal(allowsMealLoggingInto(renewed, b.id), false);
 });
 
 test("daily totals preserve zero snapshots and mark unknown nutrition/calories without mixing other dates", async () => {

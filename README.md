@@ -47,7 +47,7 @@ Most nutrition apps are calorie calculators. NutriTracker is an **AI nutrition c
 | **Water & workouts** | Built-in trackers; workouts get AI calorie estimates |
 | **Buddies** | Shared daily feed, recipient-reviewed meal proposals, reactions, leaderboard and optional cooperative weekly check-in |
 | **Insights** | Weekly summaries, monthly review, weight & calorie trends, heatmap history |
-| **Claude connector** | Optional remote MCP with 23 tools: meals, workouts, water, weigh-ins, saved meals, corrections, progress, accepted buddies' daily food/workout logs and recipient-reviewed buddy meals |
+| **Claude connector** | Optional remote MCP for Claude and ChatGPT with 25 tools: meals, workouts, water, weigh-ins, saved meals, corrections, progress, buddy meal logging with individual portions, accepted buddies' daily food/workout logs and recipient-reviewed buddy meals |
 
 ## Use NutriTracker from Claude on your phone
 

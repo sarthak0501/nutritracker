@@ -3,6 +3,8 @@
 import { requireSession } from "@/lib/session";
 import { prisma } from "@/lib/db";
 import { revalidatePath } from "next/cache";
+import { removeOwnedBuddyRelationship, setOwnerMealLoggingGrant } from "@/lib/buddy-grants";
+import { assertExpectedUser } from "@/lib/expected-user";
 
 export async function sendBuddyRequest(formData: FormData) {
   const user = await requireSession();
@@ -12,18 +14,17 @@ export async function sendBuddyRequest(formData: FormData) {
   const target = await prisma.user.findUnique({ where: { username } });
   if (!target || target.id === user.id) return;
 
-  const existing = await prisma.buddyRelationship.findFirst({
-    where: {
-      OR: [
+  await prisma.$transaction(async tx => {
+    // Simultaneous requests in opposite directions should create one invitation.
+    const pair = JSON.stringify([user.id, target.id].sort());
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`buddy-request:${pair}`}, 0))`;
+    const existing = await tx.buddyRelationship.findFirst({
+      where: { OR: [
         { requesterId: user.id, addresseeId: target.id },
         { requesterId: target.id, addresseeId: user.id },
-      ],
-    },
-  });
-  if (existing) return;
-
-  await prisma.buddyRelationship.create({
-    data: { requesterId: user.id, addresseeId: target.id, status: "PENDING" },
+      ] },
+    });
+    if (!existing) await tx.buddyRelationship.create({ data: { requesterId: user.id, addresseeId: target.id } });
   });
 
   revalidatePath("/buddy");
@@ -34,13 +35,11 @@ export async function respondToBuddyRequest(formData: FormData) {
   const id = formData.get("id") as string;
   const action = formData.get("action") as "accept" | "decline";
 
-  const rel = await prisma.buddyRelationship.findUnique({ where: { id } });
-  if (!rel || rel.addresseeId !== user.id) return;
-
+  const where = { id, addresseeId: user.id, status: "PENDING" as const };
   if (action === "accept") {
-    await prisma.buddyRelationship.update({ where: { id }, data: { status: "ACCEPTED" } });
-  } else {
-    await prisma.buddyRelationship.delete({ where: { id } });
+    await prisma.buddyRelationship.updateMany({ where, data: { status: "ACCEPTED" } });
+  } else if (action === "decline") {
+    await prisma.buddyRelationship.deleteMany({ where });
   }
 
   revalidatePath("/buddy");
@@ -48,12 +47,20 @@ export async function respondToBuddyRequest(formData: FormData) {
 
 export async function removeBuddy(formData: FormData) {
   const user = await requireSession();
+  assertExpectedUser(user.id, formData.get("expectedUserId"));
   const id = formData.get("id") as string;
 
-  const rel = await prisma.buddyRelationship.findUnique({ where: { id } });
-  if (!rel) return;
-  if (rel.requesterId !== user.id && rel.addresseeId !== user.id) return;
+  if (typeof id !== "string" || !id) return;
+  await removeOwnedBuddyRelationship(user.id, id);
+  revalidatePath("/buddy");
+}
 
-  await prisma.buddyRelationship.delete({ where: { id } });
+export async function setBuddyMealLogging(formData: FormData) {
+  const user = await requireSession();
+  const id = formData.get("id");
+  const allow = formData.get("allow");
+  if (typeof id !== "string" || !id || (allow !== "true" && allow !== "false")) return;
+  assertExpectedUser(user.id, formData.get("expectedUserId"));
+  await setOwnerMealLoggingGrant(user.id, id, allow === "true");
   revalidatePath("/buddy");
 }

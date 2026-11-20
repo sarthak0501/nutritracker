@@ -25,7 +25,7 @@ export async function getTodayDashboardData(userId: string, today: string) {
     prisma.workoutEntry.findMany({ where: { userId, date: today } }),
     prisma.logEntry.findMany({
       where: { userId, date: today },
-      include: { food: true, reactions: { include: { user: { select: { id: true, username: true } } } } },
+      include: { food: true, batch: { select: { loggedByUsername: true } }, reactions: { include: { user: { select: { id: true, username: true } } } } },
       orderBy: [{ mealType: "asc" }, { createdAt: "asc" }],
     }),
     prisma.waterEntry.findUnique({ where: { userId_date: { userId, date: today } } }),
