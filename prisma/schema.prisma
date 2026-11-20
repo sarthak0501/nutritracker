@@ -256,6 +256,7 @@ model LogBatch {
   user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   requestId String
   kind      String
+  loggedByUsername String?
   createdAt DateTime  @default(now())
   undoneAt  DateTime?
   entries   LogEntry[]
@@ -284,6 +285,7 @@ model MealProposal {
   sender          User     @relation("MealProposalSender", fields: [senderId], references: [id], onDelete: Cascade)
   recipient       User     @relation("MealProposalRecipient", fields: [recipientId], references: [id], onDelete: Cascade)
   senderRequestId String
+  occurrenceKey   String?
   name            String
   date            String
   mealType        MealType
@@ -294,6 +296,7 @@ model MealProposal {
   respondedAt     DateTime?
 
   @@unique([senderId, senderRequestId])
+  @@unique([senderId, recipientId, occurrenceKey])
   @@index([recipientId, status])
 }
 
@@ -312,6 +315,8 @@ model BuddyRelationship {
   requesterId String
   addresseeId String
   status      BuddyStatus @default(PENDING)
+  requesterAllowsMealLogging Boolean @default(false)
+  addresseeAllowsMealLogging Boolean @default(false)
 
   requester   User        @relation("Requester", fields: [requesterId], references: [id], onDelete: Cascade)
   addressee   User        @relation("Addressee", fields: [addresseeId], references: [id], onDelete: Cascade)

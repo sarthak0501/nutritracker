@@ -11,15 +11,23 @@ function canonical(value: unknown): string {
   return JSON.stringify(value) ?? "null";
 }
 
+export async function lockMealAccounts(tx: Prisma.TransactionClient, accountIds: string[]) {
+  for (const id of [...new Set(accountIds)].sort()) {
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`mcp:${id}`}, 0))`;
+  }
+}
+
 /** Atomic receipt + write. Retries never repeat a mutation or restore deleted data. */
 export async function withMcpMutation<T extends object>(userId: string, requestId: string, operation: string, input: unknown,
-  writer: (tx: Prisma.TransactionClient) => Promise<T>, client: PrismaClient = prisma): Promise<T> {
+  writer: (tx: Prisma.TransactionClient) => Promise<T>, client: PrismaClient = prisma,
+  options: { otherAccounts?: string[]; authorize?: (tx: Prisma.TransactionClient) => Promise<void> } = {}): Promise<T> {
   requestIdSchema.parse(requestId);
   const inputHash = createHash("sha256").update(canonical(input)).digest("hex");
   return client.$transaction(async tx => {
     // Serialize MCP writes per account. Row preconditions still protect edits
     // against website writers, which do not participate in this advisory lock.
-    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`mcp:${userId}`}, 0))`;
+    await lockMealAccounts(tx, [userId, ...(options.otherAccounts ?? [])]);
+    await options.authorize?.(tx);
     const receipt = await tx.mcpMutation.findUnique({ where: { userId_requestId: { userId, requestId } } });
     if (receipt) {
       if (receipt.operation !== operation || receipt.inputHash !== inputHash) throw new McpMutationError("This request ID was already used for another change. Read the current record and use a new request ID.");

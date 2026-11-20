@@ -3,6 +3,8 @@ import { MealType, Prisma } from "@prisma/client";
 import type { Food, LogEntry } from "@prisma/client";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
+import { lockMealAccounts } from "@/lib/mcp-mutations";
+import { entriesOccurrence, findMealOccurrence, savedOccurrence } from "@/lib/meal-occurrence";
 import { todayIsoDate } from "@/lib/dates";
 import { entryAmountLabel } from "@/lib/meal-units";
 import {
@@ -125,8 +127,12 @@ export function selectMealItems(items: StoredMealItem[], input: MealSelection): 
   }
   const selected = items.filter((item) => !selectedIds || selectedIds.has(item.id));
   if (!selected.length) throw new Error("Select at least one item.");
-  const multiplier = selection.multiplier;
-  return selected.map((item) => ({
+  return selected.map((item) => scaleStoredMealItem(item, selection.multiplier));
+}
+
+/** Callers validate the factor in the context of the input (plate or recipe yield). */
+export function scaleStoredMealItem(item: StoredMealItem, multiplier: number): StoredMealItem {
+  return {
     ...item,
     amount: item.amount * multiplier,
     portionLabel: multiplier === 1 ? item.portionLabel : `${multiplier} × (${item.portionLabel})`,
@@ -141,7 +147,7 @@ export function selectMealItems(items: StoredMealItem[], input: MealSelection): 
         ? item.estimationMeta : {}),
       repeatPortionLabel: multiplier === 1 ? item.portionLabel : `${multiplier} × (${item.portionLabel})`,
     },
-  }));
+  };
 }
 
 /** A selected shared item must not carry the sender's unrelated full-day free text. */
@@ -150,9 +156,14 @@ export function itemForSharing(item: StoredMealItem): StoredMealItem {
     ? item.estimationMeta : {};
   return {
     ...item,
+    mealName: null,
     sourceText: null,
     estimationMeta: {
-      ...(typeof meta.originalUnit === "string" ? { originalUnit: meta.originalUnit } : {}),
+      ...(typeof meta.originalUnit === "string" && (meta.originalUnit.toLowerCase() === item.name.toLowerCase() ||
+        /^(g|grams?|oz|ounces?|cups?|pieces?|servings?|slices?|tbsp|tsp|ml|lb|bowls?|plates?|scoops?)$/i.test(meta.originalUnit))
+        ? { originalUnit: meta.originalUnit } : {}),
+      ...(Array.isArray(meta.estimatedNutrients) ? { estimatedNutrients: meta.estimatedNutrients.filter(
+        key => typeof key === "string" && ["kcal", "protein_g", "carbs_g", "fat_g", "fiber_g"].includes(key)) } : {}),
       ...(typeof meta.originalQuantity === "number" ? { originalQuantity: meta.originalQuantity } : {}),
       repeatPortionLabel: item.portionLabel,
       sharedMeal: true,
@@ -235,6 +246,7 @@ export async function proposeSharedMealForUser(userId: string, input: ProposeSha
   const parsed = logSchema.extend({ recipientId: idSchema, name: nameSchema.optional() }).parse(input);
   try {
     return await prisma.$transaction(async (tx) => {
+    await lockMealAccounts(tx, [userId, parsed.recipientId]);
     await requireBuddy(tx, userId, parsed.recipientId);
     const existing = await tx.mealProposal.findUnique({ where: { senderId_senderRequestId: { senderId: userId, senderRequestId: parsed.requestId } } });
     if (existing) {
@@ -242,9 +254,12 @@ export async function proposeSharedMealForUser(userId: string, input: ProposeSha
       return { proposalId: existing.id };
     }
     const items = selectMealItems(await resolveSource(tx, userId, parsed.source), parsed).map(itemForSharing);
+    const occurrenceKey = parsed.source.kind === "entries" ? entriesOccurrence(parsed.source.entryIds, parsed.date, parsed.mealType) : savedOccurrence(parsed.requestId);
+    const prior = await findMealOccurrence(tx, userId, parsed.recipientId, occurrenceKey, parsed.date, parsed.mealType, items.map(item => item.id));
+    if (prior) return { proposalId: prior.id };
     const proposal = await tx.mealProposal.create({
       data: {
-        senderId: userId, recipientId: parsed.recipientId, senderRequestId: parsed.requestId,
+        senderId: userId, recipientId: parsed.recipientId, senderRequestId: parsed.requestId, occurrenceKey,
         name: parsed.name || "Shared meal", date: parsed.date, mealType: parsed.mealType, items: jsonItems(items),
       },
     });
@@ -348,7 +363,7 @@ export async function getMealLibrary(userId: string, today = todayIsoDate()): Pr
   const enabled = profile?.cooperativeCheckInEnabled ?? false;
   const [sentRows, buddyProfile, buddyCheckIn] = buddy ? await Promise.all([
     prisma.mealProposal.findMany({
-      where: { senderId: userId, recipientId: buddy.id },
+      where: { senderId: userId, recipientId: buddy.id, status: { not: "DIRECT" } },
       include: { sender: { select: { id: true, username: true } }, recipient: { select: { id: true, username: true } } },
       orderBy: { createdAt: "desc" }, take: 10,
     }),

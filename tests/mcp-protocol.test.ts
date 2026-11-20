@@ -75,7 +75,7 @@ test("legacy Claude protocol initializes and exposes the complete account-scoped
     assert.match(init.result.instructions, /explicitly asks to log/);
   }
   const result = await rpc(await handle(request("tools/list")));
-  assert.equal(result.result.tools.length, 23);
+  assert.equal(result.result.tools.length, 25);
   for (const tool of result.result.tools) {
     assert.ok(tool.name.startsWith("nutritracker_"));
     assert.equal(tool.inputSchema.additionalProperties, false);
@@ -128,6 +128,33 @@ test("malformed and oversized JSON are rejected before tool execution", async ()
   assert.deepEqual(calls, []);
 });
 
+test("supplied recipe label bypasses an exhausted estimator quota while ingredient estimates remain limited", async () => {
+  const harness = fixture({ rateLimit: async key => !key.startsWith("mcp:estimate:") });
+  const prepare = (nutrition: object) => harness.handle(request("tools/call", { name: "nutritracker_prepare_meal", arguments: {
+    description: "Entire cooked dish", mealType: "DINNER", recipe: { yield: { amount: 4, unit: "servings" }, nutrition },
+  } })).then(rpc);
+  const label = await prepare({ basis: "whole_recipe", nutrients: { kcal: 1200, protein_g: 60, carbs_g: 180, fat_g: 0 } });
+  assert.equal(label.result.structuredContent.data.tool, "prepare");
+  for (const nutrition of [{ basis: "ingredients" }, { basis: "whole_recipe", nutrients: { kcal: 1200 }, estimateMissingFromIngredients: true }]) {
+    const estimate = await prepare(nutrition);
+    assert.equal(estimate.result.isError, true);
+    assert.match(estimate.result.content[0].text, /estimate limit/);
+  }
+  assert.equal(harness.calls.length, 1);
+});
+
+test("a buddy-meal-only writer may prepare a whole recipe; personal plate preparation still requires personal write", async () => {
+  const harness = fixture({ authenticate: async () => ({ userId: "cook", connectionId: "cook", scopes: ["buddy-meals:write"] }) });
+  const personal = { description: "Lentil dish", mealType: "DINNER" };
+  const invoke = (args: object) => harness.handle(request("tools/call", { name: "nutritracker_prepare_meal", arguments: args })).then(rpc);
+  const recipe = await invoke({ ...personal, recipe: { yield: { amount: 1000, unit: "grams" }, nutrition: { basis: "ingredients" } } });
+  assert.equal(recipe.result.structuredContent.data.tool, "prepare");
+  const denied = await invoke(personal);
+  assert.equal(denied.result.isError, true);
+  assert.match(denied.result.content[0].text, /nutrition:write/);
+  assert.deepEqual(harness.calls, [{ tool: "prepare", userId: "cook" }]);
+});
+
 test("rate-limit failures are redacted and failed cache refresh never changes a committed save receipt", async () => {
   const secretMessage = "database credentials and private query must never appear";
   const broken = fixture({ rateLimit: async key => {
@@ -153,14 +180,19 @@ test("official MCP client can connect, discover tools and read an account", asyn
   });
   try {
     await client.connect(transport);
-    assert.equal((await client.listTools()).tools.length, 23);
+    assert.equal((await client.listTools()).tools.length, 25);
     const result = await client.callTool({ name: "nutritracker_get_account", arguments: {} });
     assert.deepEqual(result.structuredContent, { data: { username: "alice", tool: "account" } });
   } finally { await client.close(); }
 });
 
+const buddyPlate = {
+  source: { kind: "recipe", preparedRecipeToken: "recipe-token" }, recipientId: "buddy",
+  date: "2026-11-19", mealType: "DINNER", buddyPortion: [{ amount: 1.5, unit: "servings" }],
+};
+const buddyCommit = { ...buddyPlate, requestId: "dinner", reviewToken: "review-token", confirmed: true };
 const extensionInputs: Record<string, object> = {
-  get_buddy_day: {},
+  get_buddy_day: {}, preview_buddy_meal: buddyPlate, log_buddy_meal: buddyCommit,
   get_workouts: {}, log_workout: { requestId: "a", date: "2026-11-01", completed: true, exercises: [{ exerciseName: "Walk", durationMinutes: 30 }] },
   update_workout: { requestId: "b", entryId: "a", expectedUpdatedAt: "2026-11-01T00:00:00.000Z", changes: { durationMinutes: 40 } },
   delete_workout: { requestId: "c", entryId: "a", expectedUpdatedAt: "2026-11-01T00:00:00.000Z" },
@@ -188,7 +220,23 @@ test("all new tools reject old grants and bind authorized calls to the current a
     const rejected = await rpc(await handle(request("tools/call", { name: `nutritracker_${name}`, arguments: { ...args, userId: "alice" } }, "bob")));
     assert.ok(rejected.error || rejected.result.isError, name);
   }
-  assert.equal(calls.length, 17);
+  assert.equal(calls.length, Object.keys(extensionInputs).length);
   const listed = (await rpc(await handle(request("tools/list")))).result.tools;
-  for (const name of ["share_meal", "respond_shared_meal"]) assert.equal(listed.find((t: {name: string}) => t.name === `nutritracker_${name}`).annotations.openWorldHint, true);
+  for (const name of ["share_meal", "respond_shared_meal", "log_buddy_meal"]) assert.equal(listed.find((t: {name: string}) => t.name === `nutritracker_${name}`).annotations.openWorldHint, true);
+});
+
+test("buddy logging checks delegated access, saved-meal access and personal-write access independently", async () => {
+  async function call(args: object, scopes: string[]) {
+    const { handle, calls } = fixture({ authenticate: async () => ({ userId: "cook", connectionId: "c", scopes }) });
+    const result = await rpc(await handle(request("tools/call", { name: "nutritracker_log_buddy_meal", arguments: args })));
+    return { result: result.result, calls };
+  }
+  const oldScopes = MCP_SCOPES.filter(scope => scope !== "buddy-meals:write");
+  assert.match((await call(buddyCommit, oldScopes)).result.content[0].text, /buddy-meals:write/);
+  const minimum = ["nutrition:read", "sharing:read", "buddy-meals:write"];
+  assert.equal((await call(buddyCommit, minimum)).calls.length, 1);
+  assert.match((await call({ ...buddyCommit, selfPortion: buddyPlate.buddyPortion }, minimum)).result.content[0].text, /nutrition:write/);
+  const saved = { ...buddyCommit, source: { kind: "saved", id: "saved", occurrenceId: "event", expectedUpdatedAt: "2026-11-19T00:00:00.000Z" } };
+  assert.match((await call(saved, minimum)).result.content[0].text, /meals:read/);
+  assert.equal((await call(saved, [...minimum, "meals:read"])).calls.length, 1);
 });

@@ -179,10 +179,34 @@ test("reviewed daily logging and MCP SQL preserve old data, match Prisma, and ro
     const tracking = sql(trackingGenerator(true));
     assert.equal(tracking.status, 0, tracking.stderr);
     assert.deepEqual(await recordsFor(dailyTables), beforeTracking);
-    command(["migrate", "diff", "--from-url", url.toString(), "--to-schema-datamodel", "prisma/schema.prisma", "--exit-code"]);
     const repeatedTracking = sql(trackingSql);
     assert.notEqual(repeatedTracking.status, 0);
     assert.deepEqual(await recordsFor(dailyTables), beforeTracking);
+
+    const trackingSchema = schemaSnapshot();
+    const buddyGenerator = (commit: boolean) => {
+      const result = spawnSync(process.execPath, ["scripts/rollout-buddy-meals.mjs", ...(commit ? ["--commit"] : [])], { cwd: root, env, encoding: "utf8" });
+      assert.equal(result.status, 0, result.stderr);
+      return result.stdout;
+    };
+    const buddyRehearsal = sql(buddyGenerator(false));
+    assert.equal(buddyRehearsal.status, 0, buddyRehearsal.stderr);
+    assert.equal(schemaSnapshot(), trackingSchema);
+    const buddySql = buddyGenerator(true);
+    const tampered = sql(buddySql.replace("DO $verify$", `UPDATE "BuddyRelationship" SET status = 'PENDING' WHERE id = 'old-buddy';\nDO $verify$`));
+    assert.notEqual(tampered.status, 0);
+    assert.match(tampered.stderr, /Existing data changed in table BuddyRelationship/);
+    assert.equal(schemaSnapshot(), trackingSchema);
+    const appliedBuddy = sql(buddySql);
+    assert.equal(appliedBuddy.status, 0, appliedBuddy.stderr);
+    assert.deepEqual(await recordsFor(dailyTables), beforeTracking);
+    assert.deepEqual(await db.buddyRelationship.findUniqueOrThrow({ where: { id: "old-buddy" }, select: {
+      requesterAllowsMealLogging: true, addresseeAllowsMealLogging: true,
+    } }), { requesterAllowsMealLogging: false, addresseeAllowsMealLogging: false });
+    assert.equal((await db.logBatch.findUniqueOrThrow({ where: { id: "existing-batch" } })).loggedByUsername, null);
+    assert.equal((await db.mealProposal.findUniqueOrThrow({ where: { id: "existing-proposal" } })).occurrenceKey, null);
+    command(["migrate", "diff", "--from-url", url.toString(), "--to-schema-datamodel", "prisma/schema.prisma", "--exit-code"]);
+    assert.notEqual(sql(buddySql).status, 0, "A repeated buddy rollout must reject existing columns");
   } finally {
     await db.$disconnect();
     await admin.$executeRawUnsafe(`DROP DATABASE IF EXISTS ${quote(database)}`);

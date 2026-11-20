@@ -5,6 +5,7 @@ type EntryUnits = { amount: number; unit: AmountUnit; estimationMeta?: Prisma.Js
 
 /** Legacy LLM quantities sometimes meant counts, despite being stored as GRAM. */
 export function hasGramNutrition(food: FoodUnits, entry?: EntryUnits): boolean {
+  if (food.nutritionBasis === "SERVINGS") return false;
   if (food.nutritionBasis === "GRAMS" || food.source !== "LLM") return true;
   const meta = entry?.estimationMeta;
   return !!meta && typeof meta === "object" && !Array.isArray(meta) &&
@@ -12,7 +13,7 @@ export function hasGramNutrition(food: FoodUnits, entry?: EntryUnits): boolean {
 }
 
 export function isLegacyPortion(entry: EntryUnits, food: FoodUnits): boolean {
-  return !hasGramNutrition(food, entry);
+  return food.nutritionBasis !== "SERVINGS" && !hasGramNutrition(food, entry);
 }
 
 export function entryAmountLabel(entry: EntryUnits, food: FoodUnits): string {

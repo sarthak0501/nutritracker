@@ -44,6 +44,7 @@ export function nutrientsForGrams(food: Food, grams: number): Nutrients {
 }
 
 export function gramsForEntry(entry: LogEntry, food: Food): number | null {
+  if (food.nutritionBasis === "SERVINGS") return null;
   if (entry.unit === "GRAM") return entry.amount;
   if (entry.unit === "SERVING") {
     if (!food.servingGrams) return null;

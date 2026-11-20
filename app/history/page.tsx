@@ -71,7 +71,7 @@ export default async function HistoryPage({
   const [entries, workouts, profile] = await Promise.all([
     prisma.logEntry.findMany({
       where: { userId: user.id, date },
-      include: { food: true },
+      include: { food: true, batch: { select: { loggedByUsername: true } } },
       orderBy: [{ mealType: "asc" }, { createdAt: "asc" }],
     }),
     prisma.workoutEntry.findMany({
@@ -274,6 +274,7 @@ export default async function HistoryPage({
                     unit={e.unit}
                     mealType={e.mealType}
                     macroLine={macroLine}
+                    loggedByUsername={e.batch?.loggedByUsername}
                     isLegacyPortion={isLegacyPortion(e, e.food)}
                     portionLabel={entryAmountLabel(e, e.food)}
                   />
