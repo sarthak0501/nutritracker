@@ -140,7 +140,7 @@ never adds entries to their log.
 
 ### Log dinner for two in Claude or ChatGPT
 
-Each diary owner can open **Buddy** in NutriTracker and enable or revoke “Let [name] add meals to my log.” The two directions are independent. Reconnect the assistant you use to approve **Log meals for a buddy** and **Buddy logs and meal sharing**. The hosted ChatGPT plugin and the Claude connector use the same server.
+Each diary owner can open **Buddy** in NutriTracker and turn on or off “Let [name] add meals to my log.” The two directions are independent. Reconnect the assistant you use to approve **Log meals for a buddy** and **Buddy logs and meal sharing**. The hosted ChatGPT plugin and the Claude connector use the same server.
 
 - “The pot of dal made four equal servings. It has 1,200 calories, 60 g protein, 150 g carbs and 40 g fat in total. I ate one serving and my buddy ate one and a half. Log dinner for both of us.”
 - “I already logged my lunch. My buddy ate half as much. Log only their portion.”
@@ -155,8 +155,8 @@ The server exposes 25 tools. Requested permissions are checked on every call.
 | `nutritracker_get_account` | Shows connected account and nutrition targets | `nutrition:read` |
 | `nutritracker_get_day` | Reads a day's meals, totals and targets | `nutrition:read` |
 | `nutritracker_get_progress` | Reads recent daily progress | `nutrition:read` |
-| `nutritracker_prepare_meal` | Estimates a meal and returns a preview; does not save | `nutrition:write` |
-| `nutritracker_log_meal` | Saves a valid prepared meal once and returns updated daily progress | `nutrition:read` + `nutrition:write` |
+| `nutritracker_prepare_meal` | Prepares a personal plate or a measured recipe | `nutrition:write`, or `buddy-meals:write` for a recipe |
+| `nutritracker_log_meal` | Saves a prepared personal meal or the cook’s chosen portion of a recipe and returns updated daily progress | `nutrition:read` + `nutrition:write` |
 | `nutritracker_undo_meal` | Undoes your recent connector meal batch and returns updated daily progress | `nutrition:read` + `nutrition:write` |
 | `nutritracker_get_workouts` | Reads bounded exercise history and recorded totals | `workouts:read` |
 | `nutritracker_log_workout` | Logs completed exercises with optional supplied calories | `workouts:read` + `workouts:write` |

@@ -52,6 +52,16 @@ type RecipeInput = z.infer<typeof RecipeInputSchema>;
 export type VerifiedRecipe = z.infer<typeof recipeSchema> & { id: string; actorId: string };
 type RecipeNutrients = z.infer<typeof nutrientsSchema>;
 type RecipeContext = { date: string; mealType: MealType; mealName?: string; now: Date };
+function missingCoreNutrients(source: RecipeInput["nutrition"]) {
+  return coreNutrients.filter(key => source.basis === "ingredients" || source.nutrients[key] == null);
+}
+
+/** Reserve estimator quota only for previews that actually ask the provider for nutrition. */
+export function recipeUsesEstimator(recipe: RecipeInput): boolean {
+  const source = recipe.nutrition;
+  return source.basis === "ingredients" || (source.estimateMissingFromIngredients === true && missingCoreNutrients(source).length > 0);
+}
+
 function signingKey() {
   const secret = process.env.AUTH_SECRET;
   if (!secret || secret.length < 32) throw new McpMutationError("Recipe preparation is unavailable. Ask the NutriTracker owner to check the connection.");
@@ -70,7 +80,7 @@ function nutritionForIngredients(estimate: EstimateResponse): RecipeNutrients {
 export async function prepareRecipe(actorId: string, recipe: RecipeInput, context: RecipeContext, estimateIngredients: () => Promise<EstimateResponse>) {
   const source = recipe.nutrition;
   const supplied = source.basis === "ingredients" ? {} : source.nutrients;
-  const missing = coreNutrients.filter(key => supplied[key] == null);
+  const missing = missingCoreNutrients(source);
   let multiplier = 1;
   if (source.basis === "per_serving") {
     if (recipe.yield.unit === "grams" && !source.servingGrams) {
@@ -81,7 +91,7 @@ export async function prepareRecipe(actorId: string, recipe: RecipeInput, contex
   if (missing.length && source.basis !== "ingredients" && !source.estimateMissingFromIngredients) {
     throw new McpMutationError(`The diary also needs ${missing.join(", ")}. Ask for those values, or ask whether to estimate the missing values from the stated ingredients. Nothing was saved.`);
   }
-  const estimate = missing.length ? await estimateIngredients() : undefined;
+  const estimate = recipeUsesEstimator(recipe) ? await estimateIngredients() : undefined;
   const estimated = estimate && nutritionForIngredients(estimate);
   const estimatedNutrients: Array<typeof nutrientNames[number]> = [];
   function valueFor(key: typeof nutrientNames[number]) {
@@ -110,7 +120,7 @@ export async function prepareRecipe(actorId: string, recipe: RecipeInput, contex
   return {
     ...data, id, totals: nutrients.data, ...(estimate ? { ingredientEstimate: estimate } : {}), preparedRecipeToken,
     expiresAt: new Date((issuedAt + lifetimeSeconds) * 1000).toISOString(), saved: false,
-    nextStep: "These totals are for the entire cooked dish. Review estimated values and assumptions. Ask who ate it and their portions in the yield unit. Use this recipe token for the buddy meal preview or send-for-review tool. Keep the token private.",
+    nextStep: "These totals are for the entire cooked dish. Review estimated values and assumptions. Ask who ate it and their portions in the yield unit. Use this recipe token for the buddy meal preview or send-for-review tool. If the person requests only their own portion, use log_meal with selfRecipe and that exact portion. Keep the token private.",
   };
 }
 

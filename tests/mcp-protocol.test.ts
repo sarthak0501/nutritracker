@@ -128,6 +128,33 @@ test("malformed and oversized JSON are rejected before tool execution", async ()
   assert.deepEqual(calls, []);
 });
 
+test("supplied recipe label bypasses an exhausted estimator quota while ingredient estimates remain limited", async () => {
+  const harness = fixture({ rateLimit: async key => !key.startsWith("mcp:estimate:") });
+  const prepare = (nutrition: object) => harness.handle(request("tools/call", { name: "nutritracker_prepare_meal", arguments: {
+    description: "Entire cooked dish", mealType: "DINNER", recipe: { yield: { amount: 4, unit: "servings" }, nutrition },
+  } })).then(rpc);
+  const label = await prepare({ basis: "whole_recipe", nutrients: { kcal: 1200, protein_g: 60, carbs_g: 180, fat_g: 0 } });
+  assert.equal(label.result.structuredContent.data.tool, "prepare");
+  for (const nutrition of [{ basis: "ingredients" }, { basis: "whole_recipe", nutrients: { kcal: 1200 }, estimateMissingFromIngredients: true }]) {
+    const estimate = await prepare(nutrition);
+    assert.equal(estimate.result.isError, true);
+    assert.match(estimate.result.content[0].text, /estimate limit/);
+  }
+  assert.equal(harness.calls.length, 1);
+});
+
+test("a buddy-meal-only writer may prepare a whole recipe; personal plate preparation still requires personal write", async () => {
+  const harness = fixture({ authenticate: async () => ({ userId: "cook", connectionId: "cook", scopes: ["buddy-meals:write"] }) });
+  const personal = { description: "Lentil dish", mealType: "DINNER" };
+  const invoke = (args: object) => harness.handle(request("tools/call", { name: "nutritracker_prepare_meal", arguments: args })).then(rpc);
+  const recipe = await invoke({ ...personal, recipe: { yield: { amount: 1000, unit: "grams" }, nutrition: { basis: "ingredients" } } });
+  assert.equal(recipe.result.structuredContent.data.tool, "prepare");
+  const denied = await invoke(personal);
+  assert.equal(denied.result.isError, true);
+  assert.match(denied.result.content[0].text, /nutrition:write/);
+  assert.deepEqual(harness.calls, [{ tool: "prepare", userId: "cook" }]);
+});
+
 test("rate-limit failures are redacted and failed cache refresh never changes a committed save receipt", async () => {
   const secretMessage = "database credentials and private query must never appear";
   const broken = fixture({ rateLimit: async key => {

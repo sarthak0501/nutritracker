@@ -46,8 +46,8 @@ async function recipe(actorId: string, recipientId: string) {
   const prepared = await prepareRecipe(actorId, { yield: { amount: 4, unit: "servings" }, nutrition: {
     basis: "whole_recipe", nutrients: { kcal: 1200, protein_g: 60, carbs_g: 120, fat_g: 24, fiber_g: 0 },
   } }, { date, mealType, mealName: "Dal", now: new Date() }, async () => { throw new Error("unexpected estimate"); });
-  return { source: { kind: "recipe" as const, preparedRecipeToken: prepared.preparedRecipeToken }, recipientId, date, mealType,
-    selfPortion: [{ unit: "servings" as const, amount: 1 }], buddyPortion: [{ unit: "servings" as const, amount: 1.5 }], recipeId: prepared.id };
+  return { intent: { source: { kind: "recipe" as const, preparedRecipeToken: prepared.preparedRecipeToken }, recipientId, date, mealType,
+    selfPortion: [{ unit: "servings" as const, amount: 1 }], buddyPortion: [{ unit: "servings" as const, amount: 1.5 }] }, recipeId: prepared.id };
 }
 type Intent = z.input<typeof PreviewBuddyMealSchema>;
 async function inputFor(actorId: string, intent: Intent) {
@@ -62,7 +62,7 @@ async function loggedPlate(actorId: string) {
 
 test("a signed review saves two separate owner plates exactly once; corrections and revocation survive retries", async () => {
   const { a, b, link } = await fixture();
-  const { recipeId: _id, ...intent } = await recipe(a.id, b.id);
+  const { intent } = await recipe(a.id, b.id);
   const preview = await previewMcpBuddyMeal(a.id, intent);
   assert.equal(preview.self?.totals.kcal, 300);
   assert.equal(preview.buddy.totals.protein_g, 22.5);
@@ -88,7 +88,7 @@ test("a signed review saves two separate owner plates exactly once; corrections 
 
 test("permission is directional, restricted to accepted buddies, revocable, and gated on replay", async () => {
   const { a, b, link } = await fixture();
-  const { recipeId: _id, ...reverse } = await recipe(b.id, a.id);
+  const { intent: reverse } = await recipe(b.id, a.id);
   const request = await inputFor(b.id, reverse);
   assert.equal((await getMcpBuddyMeals(b.id)).buddies[0].mayLogMealsForBuddy, false);
   await assert.rejects(logMcpBuddyMeal(b.id, request), /not enabled/);
@@ -107,9 +107,10 @@ test("permission is directional, restricted to accepted buddies, revocable, and 
 
 test("fresh proposals need no self diary entry, and proposal acceptance and direct posting cannot double log", async () => {
   const { a, b } = await fixture();
-  const { recipeId: _id, selfPortion: _self, ...intent } = await recipe(a.id, b.id);
+  const { intent: both } = await recipe(a.id, b.id);
+  const intent = { ...both, selfPortion: undefined };
   const direct = await inputFor(a.id, intent);
-  const share = { ...intent, requestId: randomUUID(), confirmed: true as const };
+  const share = { source: intent.source, recipientId: b.id, date, mealType, buddyPortion: intent.buddyPortion, requestId: randomUUID(), confirmed: true as const };
   const sent = await shareMcpMeal(a.id, share);
   assert.equal(sent.status, "PENDING");
   assert.equal(await prisma.logEntry.count({ where: { userId: { in: [a.id, b.id] } } }), 0);
@@ -151,7 +152,7 @@ test("logged entries and saved snapshots pin versions and support disjoint side 
 
 test("a recipient write failure rolls back the cook, recipe foods, ledger and retry receipt", async () => {
   const { a, b } = await fixture();
-  const { recipeId, ...intent } = await recipe(a.id, b.id);
+  const { recipeId, intent } = await recipe(a.id, b.id);
   const request = await inputFor(a.id, intent);
   const identity = JSON.stringify([a.id, "recipe:" + recipeId]) + ":buddy";
   const occupied = await prisma.logBatch.create({ data: { userId: b.id, requestId: "mcp-buddy:" + createHash("sha256").update(identity).digest("hex"), kind: "fixture collision" } });
@@ -167,11 +168,11 @@ test("a recipient write failure rolls back the cook, recipe foods, ledger and re
 test("concurrent reciprocal saves complete; a write waiting behind a revocation sees the new grant", async () => {
   const { a, b, link } = await fixture();
   await prisma.buddyRelationship.update({ where: { id: link.id }, data: { requesterAllowsMealLogging: true } });
-  const { recipeId: _a, ...one } = await recipe(a.id, b.id);
-  const { recipeId: _b, ...two } = await recipe(b.id, a.id);
+  const { intent: one } = await recipe(a.id, b.id);
+  const { intent: two } = await recipe(b.id, a.id);
   const [ab, ba] = await Promise.all([inputFor(a.id, one), inputFor(b.id, two)]);
   await Promise.all([logMcpBuddyMeal(a.id, ab), logMcpBuddyMeal(b.id, ba)]);
-  const { recipeId: _c, ...another } = await recipe(a.id, b.id);
+  const { intent: another } = await recipe(a.id, b.id);
   const queued = await inputFor(a.id, another);
   let signalLocked!: () => void, allowCommit!: () => void;
   const locked = new Promise<void>(resolve => { signalLocked = resolve; });
@@ -186,4 +187,44 @@ test("concurrent reciprocal saves complete; a write waiting behind a revocation 
   allowCommit();
   await Promise.all([revoke, pending]);
   assert.equal(await prisma.logEntry.count({ where: { userId: { in: [a.id, b.id] } } }), 4);
+});
+
+test("a second buddy can receive leftovers only within the same cooked yield", async () => {
+  const { a, b } = await fixture();
+  const c = await user();
+  await prisma.buddyRelationship.create({ data: { requesterId: c.id, addresseeId: a.id, status: "ACCEPTED", requesterAllowsMealLogging: true } });
+  const { intent: first } = await recipe(a.id, b.id);
+  await logMcpBuddyMeal(a.id, await inputFor(a.id, first));
+  const second = { ...first, selfPortion: undefined, recipientId: c.id };
+  await assert.rejects(logMcpBuddyMeal(a.id, await inputFor(a.id, { ...second, buddyPortion: [{ unit: "servings", amount: 2 }] })), /exceed/);
+  await logMcpBuddyMeal(a.id, await inputFor(a.id, second));
+  assert.equal(await prisma.logEntry.count({ where: { userId: c.id } }), 1);
+  assert.equal(await prisma.logEntry.count({ where: { userId: a.id } }), 1);
+});
+
+test("a shared saved preset preserves its pinned source and meal occurrence across a change of assistant", async () => {
+  const { a, b } = await fixture();
+  const entry = await loggedPlate(a.id);
+  const saved = await saveMcpMealPreset(a.id, { requestId: randomUUID(), name: "Dal", source: { kind: "entries", entryIds: [entry.id] } });
+  const intent = { source: { kind: "saved" as const, id: saved.id, expectedUpdatedAt: saved.updatedAt, occurrenceId: randomUUID() },
+    recipientId: b.id, date, mealType, buddyPortion: [{ amount: 0.125, unit: "reference" as const }] };
+  const request = await inputFor(a.id, intent);
+  const sent = await shareMcpMeal(a.id, { ...intent, confirmed: true, requestId: randomUUID() });
+  assert.equal(sent.status, "PENDING");
+  await assert.rejects(logMcpBuddyMeal(a.id, request), /waiting/);
+  await respondMcpSharedMeal(b.id, { requestId: randomUUID(), proposalId: sent.proposalId, action: "accept", date, mealType });
+  assert.equal((await logMcpBuddyMeal(a.id, request)).status, "previously_logged");
+  const portions = await prisma.logEntry.findMany({ where: { userId: b.id } });
+  assert.deepEqual(portions.map(row => row.amount), [12.5]);
+});
+
+test("using only a selected entry from a larger shared plate cannot double-log it", async () => {
+  const { a, b } = await fixture();
+  const [dal, rice] = await Promise.all([loggedPlate(a.id), loggedPlate(a.id)]);
+  await shareMcpMeal(a.id, { requestId: randomUUID(), recipientId: b.id, date, mealType, confirmed: true,
+    source: { kind: "entries", entryIds: [dal.id, rice.id] }, selectedItemIds: [dal.id] });
+  const intent = { source: { kind: "entries" as const, entries: [{ id: dal.id, expectedUpdatedAt: dal.updatedAt.toISOString() }] },
+    recipientId: b.id, date, mealType, buddyPortion: [{ amount: 1, unit: "reference" as const }] };
+  await assert.rejects(logMcpBuddyMeal(a.id, await inputFor(a.id, intent)), /waiting/);
+  assert.equal(await prisma.logEntry.count({ where: { userId: b.id } }), 0);
 });

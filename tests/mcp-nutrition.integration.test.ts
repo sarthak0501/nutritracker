@@ -4,6 +4,7 @@ import { after, before, test } from "node:test";
 import { decodeJwt, SignJWT } from "jose";
 import { prisma } from "../lib/db";
 import type { EstimateResponse } from "../lib/llm";
+import { logMcpBuddyMeal, previewMcpBuddyMeal } from "../lib/mcp-delegated-meals";
 import {
   DayProgressSchema, McpNutritionError, PrepareMcpMealSchema, ProgressSchema,
   commitMcpMeal, getMcpAccount, getMcpDayProgress, getMcpProgress,
@@ -63,6 +64,51 @@ async function fixture() {
 async function preview(userId: string) {
   return prepareMcpMeal(userId, input, { client: prisma, estimate: fakeEstimator });
 }
+
+test("the self-only recipe fallback preserves supplied nutrition and shares the cook's batch and recipe yield with direct logging", async () => {
+  const { a, b } = await fixture();
+  const link = await prisma.buddyRelationship.create({ data: { requesterId: a.id, addresseeId: b.id, status: "ACCEPTED" } });
+  async function prepared() {
+    return prepareMcpMeal(a.id, { ...input, recipe: { yield: { unit: "servings", amount: 4 },
+      nutrition: { basis: "whole_recipe", nutrients: { kcal: 1200, protein_g: 60, fat_g: 24, carbs_g: 120, fiber_g: 0 } } } },
+    { client: prisma, estimate: async () => { throw new Error("Must preserve supplied values"); } });
+  }
+  const personal = (token: string, amount: number) => ({ selfRecipe: { preparedRecipeToken: token,
+    portion: { unit: "servings" as const, amount }, confirmed: true as const } });
+  async function direct(token: string, buddy: number, self?: number) {
+    const intent = { source: { kind: "recipe" as const, preparedRecipeToken: token }, recipientId: b.id,
+      date: input.date, mealType: input.mealType, buddyPortion: [{ unit: "servings" as const, amount: buddy }],
+      ...(self ? { selfPortion: [{ unit: "servings" as const, amount: self }] } : {}) };
+    const { reviewToken } = await previewMcpBuddyMeal(a.id, intent);
+    return logMcpBuddyMeal(a.id, { ...intent, reviewToken, requestId: randomUUID(), confirmed: true });
+  }
+  const token = (await prepared()).preparedRecipeToken;
+  await assert.rejects(commitMcpMeal(b.id, personal(token, 1)), /another account/);
+  await assert.rejects(commitMcpMeal(a.id, { preparedMealToken: token, ...personal(token, 1) }));
+  await assert.rejects(commitMcpMeal(a.id, personal(token, 5)), /yield/);
+  const [first, second] = await Promise.all([commitMcpMeal(a.id, personal(token, 3)), commitMcpMeal(a.id, personal(token, 3))]);
+  assert.equal(first.batchId, second.batchId);
+  const entry = await prisma.logEntry.findFirstOrThrow({ where: { userId: a.id, batchId: first.batchId } });
+  assert.equal(entry.amount, 3); assert.equal(entry.snapshotKcal, 900); assert.equal(entry.snapshotFiberG, 0);
+  assert.equal(await prisma.logEntry.count({ where: { userId: b.id } }), 0);
+  await assert.rejects(commitMcpMeal(a.id, personal(token, 2)), /another change/);
+  await prisma.buddyRelationship.update({ where: { id: link.id }, data: { addresseeAllowsMealLogging: true } });
+  await assert.rejects(direct(token, 1, 1), /already logged|already.*saved/i);
+  await assert.rejects(direct(token, 2), /yield/i);
+  await direct(token, 1);
+  const secondToken = (await prepared()).preparedRecipeToken;
+  await direct(secondToken, 3);
+  await assert.rejects(commitMcpMeal(a.id, personal(secondToken, 2)), /yield/i);
+  await commitMcpMeal(a.id, personal(secondToken, 1));
+  const thirdToken = (await prepared()).preparedRecipeToken;
+  await direct(thirdToken, 2, 1);
+  const prior = await commitMcpMeal(a.id, personal(thirdToken, 1));
+  assert.equal(prior.alreadySaved, true);
+  assert.equal(await prisma.logEntry.count({ where: { userId: a.id } }), 3);
+  await undoMcpMeal(a.id, { batchId: first.batchId });
+  assert.equal((await commitMcpMeal(a.id, personal(token, 3))).saved, false);
+  assert.equal(await prisma.logEntry.count({ where: { userId: b.id } }), 3);
+});
 
 async function resign(token: string, transform: (payload: ReturnType<typeof decodeJwt>) => ReturnType<typeof decodeJwt>) {
   const key = createHmac("sha256", fixtureSecret).update("nutritracker:mcp:prepared-meal:v1").digest();

@@ -6,7 +6,7 @@ import { prisma } from "@/lib/db";
 import {
   itemForSharing, parseStoredItems, scaleStoredMealItem, storedItemFromEntry, type StoredMealItem,
 } from "@/lib/meal-library";
-import { entriesOccurrence, savedOccurrence, findMealOccurrence, selfPlateBatchRequestId, plateBatchRequestId } from "@/lib/meal-occurrence";
+import { entriesOccurrence, savedOccurrence, findMealOccurrence, selfPlateBatchRequestId, plateBatchRequestId, checkRecipeAllocation } from "@/lib/meal-occurrence";
 import { insertMealSnapshots, mealDateSchema } from "@/lib/meal-writes";
 import { McpMutationError, requestIdSchema, withMcpMutation } from "@/lib/mcp-mutations";
 import { materializeRecipeItems, preparedRecipeTokenSchema, recipeSnapshotItems, verifyPreparedRecipe } from "@/lib/mcp-recipe";
@@ -54,23 +54,22 @@ export async function checkMealBuddy(tx: Tx, actorId: string, recipientId: strin
   return granted;
 }
 
-export async function reviewedRecipe(tx: Tx, actorId: string, token: string, date: string, mealType: MealType, materialize: boolean) {
+async function reviewedRecipe(actorId: string, token: string, date: string, mealType: MealType) {
   const recipe = await verifyPreparedRecipe(actorId, token);
   if (recipe.date !== date || recipe.mealType !== mealType)
     throw new McpMutationError("The recipe preview was prepared for a different date or meal. Prepare it again with the intended date and meal.");
-  const items = materialize ? await materializeRecipeItems(tx, actorId, recipe) : recipeSnapshotItems(recipe);
-  return { items, yield: recipe.yield, occurrence: "recipe:" + recipe.id };
+  return { items: recipeSnapshotItems(recipe), recipe, yield: recipe.yield, occurrence: "recipe:" + recipe.id };
 }
 
-export async function resolveReviewedSource(tx: Tx, actorId: string, intent: Pick<Intent, "source" | "date" | "mealType" | "selfPortion">, materialize: boolean) {
+export async function resolveReviewedSource(tx: Tx, actorId: string, intent: Pick<Intent, "source" | "date" | "mealType" | "selfPortion">) {
   const { source, date, mealType } = intent;
-  if (source.kind === "recipe") return reviewedRecipe(tx, actorId, source.preparedRecipeToken, date, mealType, materialize);
+  if (source.kind === "recipe") return reviewedRecipe(actorId, source.preparedRecipeToken, date, mealType);
   if (source.kind === "saved") {
     const [row] = await tx.$queryRaw<{ items: Prisma.JsonValue; updatedAt: Date }[]>`
       SELECT items, "updatedAt" FROM "SavedMeal" WHERE id = ${source.id} AND "userId" = ${actorId} FOR SHARE`;
     if (!row || row.updatedAt.toISOString() !== source.expectedUpdatedAt)
       throw new McpMutationError("The saved meal is missing or changed. Read it again and review the new portions.");
-    return { items: parseStoredItems(row.items), occurrence: savedOccurrence(source.occurrenceId), yield: null };
+    return { items: parseStoredItems(row.items), recipe: null, occurrence: savedOccurrence(source.occurrenceId), yield: null };
   }
   if (intent.selfPortion) throw new McpMutationError("Those entries are already in your log. Omit your portion to add only the buddy's meal.");
   const ids = source.entries.map(entry => entry.id);
@@ -83,7 +82,7 @@ export async function resolveReviewedSource(tx: Tx, actorId: string, intent: Pic
   if (locked.length !== ids.length || locked.some(row => row.updatedAt.toISOString() !== versions.get(row.id)))
     throw new McpMutationError("A selected entry is missing or changed. Read your daily log again and review the new portions.");
   const rows = await tx.logEntry.findMany({ where: { userId: actorId, id: { in: ids } }, orderBy: { id: "asc" }, include: { food: true } });
-  return { items: rows.map(storedItemFromEntry), occurrence: entriesOccurrence(ids, date, mealType), yield: null };
+  return { items: rows.map(storedItemFromEntry), recipe: null, occurrence: entriesOccurrence(ids, date, mealType), yield: null };
 }
 
 function allocatedFactors(items: StoredMealItem[], plate: Plate, basis: Yield | null) {
@@ -139,7 +138,7 @@ export async function previewMcpBuddyMeal(actorId: string, input: z.input<typeof
   const intent = PreviewBuddyMealSchema.parse(input);
   return client.$transaction(async tx => {
     const grant = await checkMealBuddy(tx, actorId, intent.recipientId, false);
-    const source = await resolveReviewedSource(tx, actorId, intent, false);
+    const source = await resolveReviewedSource(tx, actorId, intent);
     const plates = allocatePlates(source.items, source.yield, intent.buddyPortion, intent.selfPortion);
     const expires = Math.floor(Date.now() / 1000) + 1800;
     const recipient = await tx.user.findUniqueOrThrow({ where: { id: intent.recipientId }, select: { username: true } });
@@ -159,8 +158,8 @@ export async function logMcpBuddyMeal(actorId: string, input: z.input<typeof Log
   const parsed = LogBuddyMealSchema.parse(input);
   const { requestId, reviewToken } = parsed;
   const intent = PreviewBuddyMealSchema.strip().parse(parsed);
-  return withMcpMutation(actorId, requestId, "log_buddy_meal", parsed, async tx => {
-    const source = await resolveReviewedSource(tx, actorId, intent, false);
+  const receipt = await withMcpMutation(actorId, requestId, "log_buddy_meal", parsed, async tx => {
+    const source = await resolveReviewedSource(tx, actorId, intent);
     const plates = allocatePlates(source.items, source.yield, intent.buddyPortion, intent.selfPortion);
     const [until, mac] = reviewToken.split(".");
     const expires = Number(until);
@@ -174,18 +173,23 @@ export async function logMcpBuddyMeal(actorId: string, input: z.input<typeof Log
     const selfKey = selfPlateBatchRequestId(actorId, source.occurrence);
     if (intent.selfPortion && await tx.logBatch.findUnique({ where: { userId_requestId: { userId: actorId, requestId: selfKey } }, select: { id: true } }))
       throw new McpMutationError("Your portion was already logged. Omit selfPortion and review just your buddy's plate.");
+    // A prepared recipe represents one whole dish, with one stable item in the cooked yield unit.
+    const amount = [...plates.buddy, ...plates.self].reduce((total, item) => total + item.amount, 0);
+    const recipeAllocation = source.recipe ? await checkRecipeAllocation(tx, actorId, source.recipe.id, amount, source.recipe.yield.amount) : undefined;
     const [actor, recipient] = await Promise.all([actorId, intent.recipientId].map(id => tx.user.findUniqueOrThrow({ where: { id }, select: { username: true } })));
-    const sourceItems = intent.source.kind === "recipe"
-      ? (await reviewedRecipe(tx, actorId, intent.source.preparedRecipeToken, intent.date, intent.mealType, true)).items : source.items;
+    const sourceItems = source.recipe ? await materializeRecipeItems(tx, actorId, source.recipe) : source.items;
     const actual = allocatePlates(sourceItems, source.yield, intent.buddyPortion, intent.selfPortion);
     const selfBatch = actual.self.length ? await writePlate(tx, actorId, selfKey, intent, actual.self) : undefined;
     const buddyBatch = await writePlate(tx, intent.recipientId, plateBatchRequestId(actorId, source.occurrence, "buddy"), intent, actual.buddy, actor.username);
     await tx.mealProposal.create({ data: { senderId: actorId, recipientId: intent.recipientId, occurrenceKey: source.occurrence,
       senderRequestId: "direct:" + requestId, status: "DIRECT", respondedAt: new Date(), name: "Buddy meal",
-      date: intent.date, mealType: intent.mealType, items: [], acceptedBatchId: buddyBatch } });
-    return { status: "originally_logged", date: intent.date, mealType: intent.mealType,
+      date: intent.date, mealType: intent.mealType, items: intent.source.kind === "entries" ? actual.buddy.map(item => ({ id: item.id })) : [], acceptedBatchId: buddyBatch } });
+    return { status: "originally_logged", recipeAllocation, date: intent.date, mealType: intent.mealType,
       buddy: { username: recipient.username, portions: intent.buddyPortion, totals: summarize(actual.buddy).totals },
       self: selfBatch ? { username: actor.username, batchId: selfBatch, portions: intent.selfPortion, totals: summarize(actual.self).totals } : null,
       note: "Receipt for the original save. Each owner can check their daily log for later changes." };
   }, client, { otherAccounts: [intent.recipientId], authorize: async tx => { await checkMealBuddy(tx, actorId, intent.recipientId, true); } });
+  const { recipeAllocation, ...publicReceipt } = receipt;
+  void recipeAllocation;
+  return publicReceipt;
 }

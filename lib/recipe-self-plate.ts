@@ -3,7 +3,7 @@ import type { PrismaClient } from "@prisma/client";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { scaleStoredMealItem } from "@/lib/meal-library";
-import { selfPlateBatchRequestId } from "@/lib/meal-occurrence";
+import { checkRecipeAllocation, selfPlateBatchRequestId } from "@/lib/meal-occurrence";
 import { insertMealSnapshots } from "@/lib/meal-writes";
 import { McpMutationError, withMcpMutation } from "@/lib/mcp-mutations";
 import { materializeRecipeItems, preparedRecipeTokenSchema, verifyPreparedRecipe } from "@/lib/mcp-recipe";
@@ -27,15 +27,17 @@ export async function logSelfRecipePlate(userId: string, input: z.output<typeof 
     const key = selfPlateBatchRequestId(userId, occurrence);
     const prior = await tx.logBatch.findUnique({ where: { userId_requestId: { userId, requestId: key } } });
     if (prior) return { date: recipe.date, batchId: prior.id, alreadySaved: true };
+    const recipeAllocation = await checkRecipeAllocation(tx, userId, recipe.id, input.portion.amount, recipe.yield.amount);
     const items = await materializeRecipeItems(tx, userId, recipe);
     const batch = await tx.logBatch.create({ data: { requestId: key, userId, kind: `mcp-buddy:${recipe.date}` } });
     await insertMealSnapshots(tx, { userId, batchId: batch.id, date: recipe.date, mealType: recipe.mealType,
       items: items.map(item => scaleStoredMealItem(item, input.portion.amount / recipe.yield.amount)) });
-    return { date: recipe.date, batchId: batch.id, alreadySaved: false };
+    return { date: recipe.date, batchId: batch.id, recipeAllocation };
   }, client);
   const batch = await client.logBatch.findFirstOrThrow({ where: { id: receipt.batchId, userId },
     select: { createdAt: true, undoneAt: true, _count: { select: { entries: true } } } });
-  return { ...receipt, saved: batch.undoneAt === null && batch._count.entries > 0, entryCount: batch._count.entries,
+  return { batchId: receipt.batchId, date: receipt.date, ...(receipt.alreadySaved ? { alreadySaved: true } : {}),
+    saved: batch.undoneAt === null && batch._count.entries > 0, entryCount: batch._count.entries,
     ...(batch.undoneAt ? { undone: true as const } : {}),
     undoExpiresAt: new Date(batch.createdAt.getTime() + 24 * 60 * 60 * 1000).toISOString(),
     note: "This recipe can add your plate once. Check your daily log for the current portion and any corrections." };

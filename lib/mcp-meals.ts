@@ -4,7 +4,8 @@ import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { McpMutationError, withMcpMutation } from "@/lib/mcp-mutations";
 import { buddyMealLoggingEnabled } from "@/lib/buddy-meal-feature";
-import { allocatePlates, checkMealBuddy, plateSchema, recipeSourceSchema, resolveReviewedSource, reviewedRecipe } from "@/lib/mcp-delegated-meals";
+import { allocatePlates, checkMealBuddy, plateSchema, recipeSourceSchema, resolveReviewedSource } from "@/lib/mcp-delegated-meals";
+import { materializeRecipeItems } from "@/lib/mcp-recipe";
 import { entriesOccurrence, findMealOccurrence, savedOccurrence } from "@/lib/meal-occurrence";
 import { itemForSharing, parseStoredItems, publicMealItem, resolveSource, selectMealItems } from "@/lib/meal-library";
 import { insertMealSnapshots, mealDateSchema, snapshotMealEntry, withMealBatchInTransaction } from "@/lib/meal-writes";
@@ -178,6 +179,21 @@ export async function getMcpBuddyMeals(userId: string, input: z.input<typeof Get
     hasMore: pending.length > parsed.limit, nextOffset: pending.length > parsed.limit ? parsed.offset + parsed.limit : null };
 }
 
+async function resolveShareSource(tx: Prisma.TransactionClient, actorId: string, input: z.output<typeof ShareMealSchema>) {
+  const { source, date, mealType } = input;
+  if (source.kind === "recipe" || (source.kind === "entries" && "entries" in source))
+    return resolveReviewedSource(tx, actorId, { source, date, mealType });
+  if (source.kind === "entries") return { items: await mealSource(tx, actorId, source),
+    occurrence: entriesOccurrence(source.entryIds, date, mealType), recipe: null, yield: null };
+  if (source.occurrenceId && input.occurrenceId && source.occurrenceId !== input.occurrenceId)
+    throw new McpMutationError("Use one occurrence ID for this saved meal.");
+  const occurrenceId = source.occurrenceId ?? input.occurrenceId ?? input.requestId;
+  if (source.expectedUpdatedAt) return resolveReviewedSource(tx, actorId, {
+    source: { ...source, expectedUpdatedAt: source.expectedUpdatedAt, occurrenceId }, date, mealType,
+  });
+  return { items: await mealSource(tx, actorId, source), occurrence: savedOccurrence(occurrenceId), recipe: null, yield: null };
+}
+
 export async function shareMcpMeal(userId: string, input: z.input<typeof ShareMealSchema>, client: PrismaClient = prisma) {
   const parsed = ShareMealSchema.parse(input);
   return withMcpMutation(userId, parsed.requestId, "share_meal", parsed, async tx => {
@@ -186,24 +202,14 @@ export async function shareMcpMeal(userId: string, input: z.input<typeof ShareMe
       throw new McpMutationError("Choose either buddyPortion or the legacy item selection and multiplier.");
     if (source.kind === "recipe" && !parsed.buddyPortion)
       throw new McpMutationError("Specify the buddy's portion using the cooked recipe's yield unit.");
-    if (source.kind === "saved" && source.occurrenceId && parsed.occurrenceId && source.occurrenceId !== parsed.occurrenceId)
-      throw new McpMutationError("Use one occurrence ID for this saved meal.");
-    const savedKey = source.kind === "saved" ? source.occurrenceId ?? parsed.occurrenceId ?? parsed.requestId : "";
-    const pinned = source.kind === "recipe" || (source.kind === "entries" && "entries" in source) ? source
-      : source.kind === "saved" && source.expectedUpdatedAt ? { ...source, expectedUpdatedAt: source.expectedUpdatedAt, occurrenceId: savedKey } : undefined;
-    const reviewed = pinned ? await resolveReviewedSource(tx, userId, { source: pinned, date, mealType }, false) : undefined;
-    const legacySource = source.kind === "saved" || (source.kind === "entries" && "entryIds" in source) ? source : undefined;
-    const originals = reviewed?.items ?? await mealSource(tx, userId, legacySource!);
-    const portions = parsed.buddyPortion;
-    const select = (items: typeof originals) => portions ? allocatePlates(items, reviewed?.yield ?? null, portions).buddy
+    const reviewed = await resolveShareSource(tx, userId, parsed);
+    const select = (items: typeof reviewed.items) => parsed.buddyPortion ? allocatePlates(items, reviewed.yield, parsed.buddyPortion).buddy
       : selectMealItems(items, parsed).map(itemForSharing);
-    const occurrenceKey = reviewed?.occurrence ?? (legacySource?.kind === "entries"
-      ? entriesOccurrence(legacySource.entryIds, date, mealType) : savedOccurrence(savedKey));
-    const items = select(originals);
+    const occurrenceKey = reviewed.occurrence;
+    const items = select(reviewed.items);
     const prior = await findMealOccurrence(tx, userId, recipientId, occurrenceKey, date, mealType, items.map(item => item.id));
     if (prior) return { proposalId: prior.id, recipientId, status: prior.status, savedToRecipientLog: prior.status === "DIRECT" || prior.status === "ACCEPTED" };
-    const sharedItems = source.kind === "recipe"
-      ? select((await reviewedRecipe(tx, userId, source.preparedRecipeToken, date, mealType, true)).items) : items;
+    const sharedItems = reviewed.recipe ? select(await materializeRecipeItems(tx, userId, reviewed.recipe)) : items;
     const proposal = await tx.mealProposal.create({ data: { senderId: userId, recipientId, occurrenceKey,
       senderRequestId: requestKey(userId, parsed.requestId, "share"), name: parsed.name ?? "Shared meal", date,
       mealType, items: json(sharedItems) } });

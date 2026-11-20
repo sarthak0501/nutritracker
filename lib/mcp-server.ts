@@ -10,6 +10,7 @@ import * as activity from "@/lib/mcp-activity";
 import { LogBuddyMealSchema, PreviewBuddyMealSchema, logMcpBuddyMeal, previewMcpBuddyMeal } from "@/lib/mcp-delegated-meals";
 import * as meals from "@/lib/mcp-meals";
 import { BuddyDaySchema, getMcpBuddyDay } from "@/lib/mcp-buddy";
+import { recipeUsesEstimator } from "@/lib/mcp-recipe";
 import { McpMutationError } from "@/lib/mcp-mutations";
 
 type Principal = { userId: string; scopes: string[]; connectionId: string };
@@ -80,9 +81,12 @@ function makeServer(principal: Principal, deps: Dependencies) {
     inputSchema: ProgressSchema, outputSchema, annotations: readAnnotations,
   }, async input => execute("nutrition:read", () => deps.services.progress(principal.userId, input)));
   server.registerTool("nutritracker_prepare_meal", {
-    title: "Estimate a meal before saving", description: "Prepare a personal plate or a whole recipe without saving. For buddy meals use recipe with the cooked yield and supplied nutrition or ingredients. Preserve known nutrition and clarify any missing conversion. Returns estimated items, assumptions and a signed token valid for 30 minutes. Show the preview and resolve uncertainties before saving. Requires meal-writing permission. Never invent a user ID or edit the returned token.",
+    title: "Estimate a meal before saving", description: "Prepare a personal plate or a whole recipe without saving. For buddy meals use recipe with the cooked yield and supplied nutrition or ingredients. Preserve known nutrition and clarify any missing conversion. Returns estimated items, assumptions and a signed token valid for 30 minutes. Show the preview and resolve uncertainties before saving. Personal plates require nutrition:write. Whole recipes accept nutrition:write or buddy-meals:write. Never invent a user ID or edit the returned token.",
     inputSchema: PrepareMcpMealSchema, outputSchema, annotations: { ...readAnnotations, idempotentHint: false },
-  }, async input => execute("nutrition:write", () => deps.services.prepare(principal.userId, input), false, true));
+  }, async input => {
+    const scope = input.recipe && !principal.scopes.includes("nutrition:write") ? "buddy-meals:write" : "nutrition:write";
+    return execute(scope, () => deps.services.prepare(principal.userId, input), false, !input.recipe || recipeUsesEstimator(input.recipe));
+  });
   server.registerTool("nutritracker_log_meal", {
     title: "Save my prepared meal", description: "Save the meal previously returned by prepare_meal to this person's food log. Only call after explicit intent to log an actual meal and after resolving estimate uncertainties. Pass the exact personal preparedMealToken, or use selfRecipe for a confirmed personal portion of a prepared recipe with its measured yield unit. Retrying the same save returns the existing receipt without duplicating entries. Returns the save receipt and refreshed daily totals.",
     inputSchema: CommitMcpMealSchema, outputSchema, annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
